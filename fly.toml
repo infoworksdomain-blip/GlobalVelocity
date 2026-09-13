@@ -1,0 +1,35 @@
+# Fly.io: `fly launch --no-deploy` then `fly deploy`. Run the worker as a second process group.
+app = "velocity"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  release_command = "npm run db:migrate"
+
+[processes]
+  app = "npm run start"
+  worker = "npm run worker"
+
+[env]
+  NODE_ENV = "production"
+  PROVIDER_MODE = "mock"
+  STORAGE_DRIVER = "s3"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false      # the worker must keep running; keep the web machine warm for cron-like jobs
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.checks]
+    [[http_service.checks.http]]
+      path = "/api/health"
+      interval = "30s"
+      timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-2x"          # ffmpeg rendering is CPU-bound; size the worker group up as volume grows
+  memory = "2gb"

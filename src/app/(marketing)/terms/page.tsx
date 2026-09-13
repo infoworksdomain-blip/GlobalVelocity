@@ -1,0 +1,4 @@
+import { pageMeta } from "@/lib/seo";
+export const metadata = pageMeta({ title: 'Terms of service', description: 'The terms that govern your use of Velocity: acceptable use, content ownership, billing and cancellation, credits, liability and governing law.', path: '/terms' });
+
+export default function Terms() { return <div className="mx-auto max-w-3xl px-4 py-16"><h1 className="text-4xl font-extrabold">Terms of service</h1><p className="mt-4 text-slate-600">Placeholder — replace with your counsel-approved terms before launch. Cover: acceptable use (you must comply with each platform's terms and disclose AI-generated content where required), content ownership (you own outputs; licensed human UGC clips are licensed, not sold), billing and cancellation, credits (no rollover), limitation of liability, and governing law.</p></div>; }

@@ -1,0 +1,68 @@
+# Render blueprint: web + worker + managed Postgres + Redis. Push this repo to GitHub, then
+# Render → New → Blueprint → pick the repo. Fill the `sync: false` secrets in the dashboard.
+databases:
+  - name: velocity-db
+    databaseName: velocity
+    user: velocity
+    plan: basic-256mb        # pgvector is available on Render Postgres 16
+    postgresMajorVersion: "16"
+services:
+  - type: redis
+    name: velocity-redis
+    plan: starter
+    ipAllowList: []
+  - type: web
+    name: velocity-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    preDeployCommand: npm run db:migrate
+    autoDeploy: true
+    envVars: &env
+      - key: NODE_ENV
+        value: production
+      - key: APP_URL
+        sync: false           # https://your-domain.com
+      - key: AUTH_URL
+        sync: false           # https://your-domain.com/api/auth
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false           # openssl rand -hex 32
+      - key: DATABASE_URL
+        fromDatabase: { name: velocity-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: redis, name: velocity-redis, property: connectionString }
+      - key: PROVIDER_MODE
+        value: mock           # flip to live once provider keys are set
+      - key: STORAGE_DRIVER
+        value: s3
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_PUBLIC_URL
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+  - type: worker
+    name: velocity-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: npm run worker
+    autoDeploy: true
+    envVars: *env
