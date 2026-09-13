@@ -3,9 +3,15 @@ services:
   db:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
-    environment: { POSTGRES_USER: velocity, POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}, POSTGRES_DB: velocity }
+    environment:
+      POSTGRES_USER: velocity
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: velocity
     volumes: [dbdata:/var/lib/postgresql/data]
-    healthcheck: { test: ["CMD-SHELL", "pg_isready -U velocity"], interval: 10s, retries: 10 }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U velocity"]
+      interval: 10s
+      retries: 10
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -17,18 +23,25 @@ services:
     command: sh -c "npm run db:migrate && npm run start"
     env_file: .env
     ports: ["127.0.0.1:3000:3000"]
-    depends_on: { db: { condition: service_healthy }, redis: { condition: service_started } }
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
   worker:
     build: .
     restart: unless-stopped
     command: npm run worker
     env_file: .env
-    depends_on: { db: { condition: service_healthy }, redis: { condition: service_started } }
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
   backup:
     build: .
     restart: unless-stopped
     entrypoint: ["sh", "-c", "while true; do sleep 86400; npm run backup; done"]
     env_file: .env
     volumes: [./backups:/app/backups]
-    depends_on: { db: { condition: service_healthy } }
-volumes: { dbdata: {}, redisdata: {} }
+    depends_on:
+      db: { condition: service_healthy }
+volumes:
+  dbdata: {}
+  redisdata: {}
