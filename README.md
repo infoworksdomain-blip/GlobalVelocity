@@ -126,6 +126,11 @@ tracked links + attribution, automation preview/run, character creation with cre
 
 ## Deployment
 
+See **DEPLOYMENT.md** for the full guide: pushing to GitHub, provisioning managed Postgres (Neon/Supabase/Render/RDS),
+Redis and object storage, one-click blueprints for Render (`render.yaml`), Fly (`fly.toml`), Railway (`railway.json`) and a
+single-VM `docker-compose.prod.yml`, plus DNS/callback URLs and post-deploy verification.
+
+
 Any Node 22 host with ffmpeg. Recommended: the `app` container behind a load balancer (stateless) and 1..N `worker`
 containers; managed Postgres with the `vector` extension; managed Redis; S3/R2 bucket with public read on `S3_PUBLIC_URL`
 (or switch `publicUrl()` to signed URLs). Set `WORKER_CONCURRENCY` per worker (ffmpeg is CPU-bound; 2–4 per vCPU pair).
