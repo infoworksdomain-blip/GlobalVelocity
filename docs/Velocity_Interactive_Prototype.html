@@ -1,0 +1,1159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Velocity — interactive design prototype</title>
+<style>
+:root{
+  --brand50:#eef2ff;--brand100:#dfe6ff;--brand200:#c3d0ff;--brand400:#6b8bff;--brand500:#3d5cf5;--brand600:#2947d6;--brand700:#1f38ad;--brand900:#0b1a4b;
+  --accent400:#34d399;--accent500:#10b981;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f6f8fb;
+  --soft:0 1px 2px rgba(15,23,42,.04),0 8px 24px -12px rgba(15,23,42,.18);
+  --lift:0 12px 40px -16px rgba(41,71,214,.35);
+  --sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans);font-size:14px;line-height:1.5;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input,select,textarea{font:inherit}
+h1,h2,h3,h4{margin:0;letter-spacing:-.02em}
+p{margin:0}
+code{font-family:var(--mono);font-size:12.5px}
+::selection{background:var(--brand100)}
+
+/* ---------- prototype chrome ---------- */
+#chrome{position:fixed;inset:0 0 auto 0;height:52px;z-index:100;background:#0b1a4b;color:#fff;display:flex;align-items:center;gap:14px;padding:0 16px}
+#chrome .logo{display:flex;align-items:center;gap:8px;font-weight:800}
+#chrome .mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#3d5cf5,#1f38ad);display:grid;place-items:center}
+#chrome .tag{background:rgba(255,255,255,.14);border-radius:999px;padding:3px 10px;font-size:12px}
+#chrome .seg{margin-left:auto;display:flex;background:rgba(255,255,255,.12);border-radius:10px;padding:3px;gap:2px}
+#chrome .seg button{padding:5px 12px;border-radius:8px;font-size:12.5px;font-weight:600;color:#dbe3ff}
+#chrome .seg button.on{background:#fff;color:var(--brand700)}
+#pagebar{position:fixed;top:52px;left:0;right:0;height:42px;z-index:99;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:4px;padding:0 14px;overflow-x:auto;white-space:nowrap}
+#pagebar button{padding:5px 10px;border-radius:8px;font-size:12.5px;color:#475569;font-weight:500}
+#pagebar button:hover{background:#f1f5f9}
+#pagebar button.on{background:var(--brand50);color:var(--brand700);font-weight:600}
+#view{padding-top:94px;min-height:100vh}
+
+/* ---------- primitives ---------- */
+.btn,.btn-primary,.btn-secondary,.btn-ghost,.btn-danger{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:10px 16px;font-size:13.5px;font-weight:600;transition:all .15s}
+.btn-primary{background:var(--brand600);color:#fff;box-shadow:0 6px 16px -8px rgba(41,71,214,.6)}
+.btn-primary:hover{background:var(--brand700)}
+.btn-secondary{background:#fff;color:#1e293b;border:1px solid var(--line)}
+.btn-secondary:hover{background:#f8fafc;border-color:#cbd5e1}
+.btn-ghost{color:#475569;padding:8px 12px}
+.btn-ghost:hover{background:#f1f5f9;color:var(--ink)}
+.btn-danger{background:#dc2626;color:#fff}
+.btn.sm,.btn-primary.sm,.btn-secondary.sm,.btn-ghost.sm,.btn-danger.sm{padding:5px 10px;font-size:12px;border-radius:9px}
+.card{border-radius:16px;border:1px solid rgba(226,232,240,.8);background:#fff;box-shadow:var(--soft)}
+.card.hover{transition:all .2s}
+.card.hover:hover{transform:translateY(-2px);box-shadow:var(--lift)}
+.input{width:100%;border-radius:12px;border:1px solid var(--line);background:#fff;padding:10px 14px;font-size:13.5px;outline:none}
+.input:focus{border-color:var(--brand400);box-shadow:0 0 0 4px var(--brand50)}
+.label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+.badge{display:inline-flex;align-items:center;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;background:#f1f5f9;color:#475569}
+.badge.green{background:#dcfce7;color:#15803d}.badge.blue{background:#e0f2fe;color:#0369a1}.badge.amber{background:#fef3c7;color:#b45309}
+.badge.red{background:#fee2e2;color:#b91c1c}.badge.brand{background:var(--brand50);color:var(--brand700)}.badge.dark{background:#0f172a;color:#fff}
+.kpi{border-radius:16px;border:1px solid rgba(226,232,240,.8);background:#fff;padding:18px;box-shadow:var(--soft)}
+.kpi .l{font-size:12px;font-weight:600;color:var(--muted)}
+.kpi .v{font-size:26px;font-weight:800;letter-spacing:-.03em;margin-top:4px}
+.kpi .s{font-size:11.5px;color:#94a3b8;margin-top:2px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;border-radius:999px;border:1px solid var(--brand100);background:var(--brand50);padding:5px 12px;font-size:12px;font-weight:700;color:var(--brand700)}
+.page-title{font-size:26px;font-weight:800;letter-spacing:-.03em}
+.muted{color:var(--muted)}
+.grad-text{background:linear-gradient(90deg,#2947d6,#6b8bff 50%,#10b981);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-bg{background:radial-gradient(1200px 600px at 20% -10%,#dfe6ff 0,transparent 60%),radial-gradient(900px 500px at 100% 0,#d1fae5 0,transparent 55%)}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+table.tbl th{text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);background:#f8fafc;padding:11px 14px;white-space:nowrap}
+table.tbl td{padding:11px 14px;border-top:1px solid #f1f5f9;vertical-align:middle}
+table.tbl tr:hover td{background:#f8fafc}
+.grid{display:grid;gap:16px}
+.mb2{margin-bottom:8px}.mb4{margin-bottom:16px}.mb6{margin-bottom:24px}.mt2{margin-top:8px}.mt4{margin-top:16px}.mt6{margin-top:24px}
+.row{display:flex;align-items:center;gap:10px}
+.wrap{display:flex;flex-wrap:wrap;gap:10px}
+.mono{font-family:var(--mono);font-size:12px}
+.pill-progress{height:6px;border-radius:99px;background:#e2e8f0;overflow:hidden}
+.pill-progress i{display:block;height:100%;border-radius:99px;background:var(--brand600)}
+.sep{border-top:1px solid var(--line)}
+
+/* ---------- app shell ---------- */
+.shell{display:grid;grid-template-columns:248px 1fr;min-height:calc(100vh - 94px)}
+.side{background:#fff;border-right:1px solid rgba(226,232,240,.8);display:flex;flex-direction:column;padding:14px 12px}
+.side .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;padding:2px 6px 12px}
+.side .mark{width:32px;height:32px;border-radius:11px;background:linear-gradient(135deg,var(--brand500),var(--brand700));display:grid;place-items:center;box-shadow:0 6px 16px -8px rgba(41,71,214,.8)}
+.side .grp{padding:12px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#94a3b8}
+.nav{display:flex;align-items:center;gap:11px;border-radius:12px;padding:8px 11px;font-size:13.5px;font-weight:500;color:#475569;width:100%;text-align:left}
+.nav:hover{background:#f1f5f9;color:var(--ink)}
+.nav.on{background:var(--brand50);color:var(--brand700);font-weight:600}
+.nav svg{width:16px;height:16px;opacity:.7}.nav.on svg{opacity:1}
+.plancard{margin-top:auto;border-radius:16px;padding:16px;color:#fff;background:linear-gradient(135deg,var(--brand900),var(--brand700))}
+.topbar{position:sticky;top:94px;z-index:20;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(226,232,240,.8);background:rgba(255,255,255,.85);backdrop-filter:blur(8px);padding:10px 20px}
+.searchbtn{margin-left:auto;display:flex;align-items:center;gap:8px;border-radius:12px;border:1px solid var(--line);background:#f8fafc;padding:6px 12px;font-size:12px;color:var(--muted);width:250px}
+.kbd{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:5px;padding:0 5px;font-size:10px}
+.avatar{width:24px;height:24px;border-radius:8px;background:var(--brand100);color:var(--brand700);display:grid;place-items:center;font-weight:800;font-size:11px}
+.main{padding:24px 26px;display:flex;flex-direction:column;gap:16px}
+.banner{border-radius:12px;border:1px solid #fde68a;background:#fffbeb;padding:9px 14px;font-size:12px;color:#92400e}
+
+/* ---------- marketing ---------- */
+.mhead{position:sticky;top:94px;z-index:20;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);border-bottom:1px solid #f1f5f9}
+.mhead .in{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+.mnav{display:flex;gap:26px;font-size:13.5px;font-weight:500;color:#475569}
+.mwrap{max-width:1100px;margin:0 auto;padding:0 16px}
+.mfoot{border-top:1px solid #f1f5f9;background:#f8fafc;margin-top:0}
+.mfoot .cols{max-width:1100px;margin:0 auto;padding:52px 16px;display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:36px;font-size:13px}
+.mfoot ul{list-style:none;padding:0;margin:0;display:grid;gap:8px;color:#475569}
+.section{padding:76px 0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+
+/* ---------- media / swipe ---------- */
+.phone{width:300px;aspect-ratio:9/16;border-radius:26px;padding:22px;color:#fff;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 30px 60px -30px rgba(11,26,75,.7)}
+.g1{background:linear-gradient(135deg,#2947d6,#0b1a4b)}.g2{background:linear-gradient(135deg,#c026d3,#4c1d95)}
+.g3{background:linear-gradient(135deg,#10b981,#065f46)}.g4{background:linear-gradient(135deg,#f59e0b,#9a3412)}
+.g5{background:linear-gradient(135deg,#0ea5e9,#0c4a6e)}.g6{background:linear-gradient(135deg,#ef4444,#7f1d1d)}
+.thumb{aspect-ratio:9/16;border-radius:14px;padding:14px;color:#fff;display:flex;align-items:flex-end;font-weight:800;font-size:15px;line-height:1.15;position:relative;overflow:hidden}
+.thumb .tag{position:absolute;top:10px;left:10px;font-size:10px;font-weight:700;background:rgba(255,255,255,.22);border-radius:999px;padding:2px 8px}
+.circle{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:22px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.cal .h{background:#f8fafc;padding:8px;font-size:11px;font-weight:700;color:var(--muted)}
+.cal .d{background:#fff;min-height:104px;padding:6px}
+.cal .d .n{font-size:11px;color:#94a3b8}
+.ev{border-radius:8px;padding:4px 6px;font-size:10.5px;margin-top:4px;border:1px solid;display:flex;gap:4px;align-items:center}
+.ev.pub{background:#f0fdf4;border-color:#bbf7d0}.ev.sch{background:#f0f9ff;border-color:#bae6fd}
+.ev.pend{background:#fffbeb;border-color:#fde68a}.ev.fail{background:#fef2f2;border-color:#fecaca}
+.bar{display:flex;align-items:flex-end;gap:5px;height:110px}
+.bar i{flex:1;background:var(--brand600);border-radius:5px 5px 0 0;display:block}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs button{display:flex;align-items:center;gap:7px;padding:10px 14px;font-size:13px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--brand700);border-bottom-color:var(--brand600);font-weight:600}
+.tabs button svg{width:15px;height:15px}
+details{border-top:1px solid #f1f5f9}
+details summary{cursor:pointer;list-style:none;padding:14px 0;font-weight:600;display:flex;justify-content:space-between}
+details summary::-webkit-details-marker{display:none}
+details p{padding-bottom:14px;color:var(--muted);font-size:13.5px}
+.mapbox{height:300px;border-radius:14px;background:linear-gradient(135deg,#e2e8f0,#cbd5e1);position:relative;overflow:hidden;display:grid;place-items:center}
+.mapbox .grid-lines{position:absolute;inset:0;background-image:linear-gradient(#ffffff55 1px,transparent 1px),linear-gradient(90deg,#ffffff55 1px,transparent 1px);background-size:38px 38px}
+.mapbox .pin{position:relative;z-index:2;text-align:center}
+.mapbox .dot{width:20px;height:20px;border-radius:50%;background:#dc2626;border:4px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,.3);margin:0 auto}
+@media(max-width:900px){.shell{grid-template-columns:1fr}.side{display:none}.mfoot .cols{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div id="chrome">
+  <div class="logo"><span class="mark">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg></span>Velocity</div>
+  <span class="tag">Interactive design prototype · dummy data</span>
+  <div class="seg" id="areaSeg"></div>
+</div>
+<div id="pagebar"></div>
+<div id="view"></div>
+<script>
+/* ============ icons ============ */
+const I = (p, w) => `<svg width="${w||16}" height="${w||16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const icon = {
+  zap: I('<path d="M13 2 3 14h7l-1 8 10-12h-7z"/>'),
+  film: I('<rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 9h20M2 15h20"/>'),
+  folder: I('<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 3.9A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>'),
+  flame: I('<path d="M12 2c1 4 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 2 2 2 0 0-2-1-3 1-5Z"/>'),
+  users: I('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/>'),
+  cal: I('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'),
+  bot: I('<rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/>'),
+  chart: I('<path d="M3 3v18h18"/><path d="M7 16l4-5 3 3 5-7"/>'),
+  gear: I('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.5-2.6l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4.6a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4Z"/>'),
+  card: I('<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>'),
+  link: I('<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2"/>'),
+  sparkle: I('<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2"/>'),
+  shield: I('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>'),
+  bell: I('<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'),
+  search: I('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
+  plus: I('<path d="M12 5v14M5 12h14"/>'),
+  chev: I('<path d="m6 9 6 6 6-6"/>'),
+  check: I('<path d="M20 6 9 17l-5-5"/>'),
+  arrow: I('<path d="M5 12h14M13 6l6 6-6 6"/>'),
+  building: I('<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h6"/>'),
+  key: I('<circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.2-8.2 3 3-2 2-2-2M15 9l3 3"/>'),
+  plug: I('<path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>'),
+  gauge: I('<path d="M12 14 16 9"/><circle cx="12" cy="14" r="8"/>'),
+  alert: I('<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.3 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.3a2 2 0 0 0-3.4 0Z"/>'),
+  send: I('<path d="m22 2-7 20-4-9-9-4Z"/>'),
+  scroll: I('<path d="M8 21h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H8"/><path d="M2 5a2 2 0 0 1 2-2h4v16a2 2 0 0 1-4 0V5Z"/>'),
+  library: I('<path d="M4 3h4v18H4zM10 3h4v18h-4zM17 3l4 17"/>'),
+  pin: I('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/>'),
+  phone: I('<path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.4 2.1L8.1 9.9a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.4 1.9.6 2.9.7a2 2 0 0 1 1.7 2Z"/>'),
+  mail: I('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>'),
+  clock: I('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+  nav: I('<path d="m3 11 19-9-9 19-2-8-8-2Z"/>'),
+  home: I('<path d="M3 10 12 3l9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>'),
+  life: I('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><path d="m4.9 4.9 4.2 4.2M14.9 14.9l4.2 4.2M14.9 9.1l4.2-4.2M4.9 19.1l4.2-4.2"/>'),
+  logout: I('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'),
+  rotate: I('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'),
+  trash: I('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>'),
+  ban: I('<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>'),
+  wand: I('<path d="m15 4 5 5L9 20H4v-5z"/><path d="M14 5 19 10"/>'),
+  img: I('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>'),
+  video: I('<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m22 8-6 4 6 4z"/>'),
+  code: I('<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>'),
+  train: I('<rect x="4" y="3" width="16" height="13" rx="2"/><path d="M4 11h16M8 19l-2 3M16 19l2 3M8.5 16h.01M15.5 16h.01"/>'),
+  car: I('<path d="M5 17h14M6 17V9l2-4h8l2 4v8"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/>'),
+};
+</script>
+<script>
+/* ============ dummy data ============ */
+const DATA = {
+  user: { name: "Jabbar Ahmed", email: "jabbar@northwindapp.com", initial: "J" },
+  account: { plan: "Growth", interval: "monthly", renews: "14 Oct 2026", credits: 342, saves: 41, savesLimit: 100 },
+  workspace: { name: "Northwind", tz: "Europe/London" },
+  workspaces: ["Northwind", "Northwind Labs", "Client · Copperleaf"],
+  profile: {
+    product: "Northwind", url: "https://northwindapp.com", tagline: "Invoicing that chases payments for you",
+    desc: "Northwind is invoicing software for freelancers and small studios that automatically chases late payments.",
+    industry: "SaaS · Fintech", cta: "Start free trial", lang: "en", tone: "direct, friendly, confident",
+    audience: "Freelancers and small studios", primary: "#2947d6", secondary: "#0b1a4b",
+    pains: ["Clients pay late and nobody wants to chase", "Spreadsheets break at 20+ invoices", "No visibility on cash flow"],
+    features: ["Automatic payment reminders", "Stripe and bank payouts", "Recurring invoices", "Cash-flow forecast", "Client portal"],
+    diffs: ["Set up in 4 minutes", "No per-invoice fees", "Chases in your own tone of voice"],
+    pillars: ["Behind the build", "Customer wins", "Freelance money tips", "Trends & memes"],
+    hooks: ["I stopped chasing invoices manually", "POV: the client finally paid", "3 things I wish I knew before freelancing full time", "This is how I get paid while I sleep"],
+  },
+  content: [
+    { id: "c1", hook: "I stopped chasing invoices manually", format: "AI UGC", status: "published", grad: "g1", score: 78, char: "Maya", dur: "0:28", views: 142800, likes: 9120, comments: 411, platform: "TikTok", date: "11 Sep" },
+    { id: "c2", hook: "3 things I wish I knew before freelancing full time", format: "Slideshow", status: "published", grad: "g2", score: 74, dur: "0:15", views: 61200, likes: 3980, comments: 187, platform: "Instagram", date: "10 Sep" },
+    { id: "c3", hook: "POV: the client finally paid", format: "Meme", status: "scheduled", grad: "g4", score: 66, date: "14 Sep" },
+    { id: "c4", hook: "Your invoice is 34 days late. Again.", format: "Hook + demo", status: "scheduled", grad: "g5", score: 71, dur: "0:18", date: "14 Sep" },
+    { id: "c5", hook: "Day 1 of getting paid on time for 30 days", format: "Trend remix", status: "saved", grad: "g3", score: 81, dur: "0:22" },
+    { id: "c6", hook: "Nobody talks about the cash-flow forecast", format: "AI UGC", status: "saved", grad: "g6", score: 69, char: "Marcus", dur: "0:31" },
+    { id: "c7", hook: "The £0 way to never chase a client again", format: "Slideshow", status: "saved", grad: "g1", score: 72 },
+    { id: "c8", hook: "Me: I'll invoice tomorrow", format: "Meme", status: "draft", grad: "g2", score: 58 },
+    { id: "c9", hook: "How I forecast cash flow in 90 seconds", format: "Hook + demo", status: "published", grad: "g3", score: 76, dur: "0:19", views: 23400, likes: 1510, comments: 96, platform: "YouTube", date: "8 Sep" },
+    { id: "c10", hook: "Unpopular opinion: most invoicing advice is wrong", format: "AI UGC", status: "published", grad: "g5", score: 64, char: "Sofia", dur: "0:26", views: 8900, likes: 640, comments: 58, platform: "LinkedIn", date: "7 Sep" },
+  ],
+  stack: [
+    { hook: "\"I don't have time to chase invoices\" — this is for you", format: "AI UGC", grad: "g1", score: 70, char: "Sofia", dur: "0:20",
+      script: "Okay so here's the thing — I run a small studio and for months I just… didn't chase invoices. Then I tried Northwind. It sends the reminder in my tone of voice, three days before the due date and every week after. I got £4,200 back in the first month. If you've been putting it off too, link in bio.",
+      caption: "\"I don't have time\" — this is for you 🧾 Start free — link in bio", tags: ["founder", "freelance", "invoicing", "smallbusiness", "buildinpublic"] },
+    { hook: "How automatic reminders save you 6 hours a week", format: "Slideshow", grad: "g2", score: 68, dur: "0:15", script: "Slide-based explainer with five beats.", caption: "Six hours a week, back. ⏱️", tags: ["productivity", "freelance", "saas"] },
+    { hook: "Northwind vs doing it the old way", format: "Hook + demo", grad: "g5", score: 65, dur: "0:18", script: "Split-screen comparison over the product demo.", caption: "The old way vs the Northwind way", tags: ["comparison", "invoicing"] },
+  ],
+  socials: [
+    { platform: "TikTok", handle: "northwindapp", status: "active", followers: "12.4k", slots: 5 },
+    { platform: "Instagram", handle: "northwind.app", status: "active", followers: "8.1k", slots: 4 },
+    { platform: "YouTube", handle: "@northwind", status: "active", followers: "2.3k", slots: 3 },
+    { platform: "LinkedIn", handle: "Northwind", status: "reconnect needed", followers: "4.9k", slots: 2 },
+  ],
+  calendar: [
+    { d: 8, t: "09:00", p: "TT", hook: "How I forecast cash flow", s: "pub" },
+    { d: 9, t: "18:00", p: "IG", hook: "Client portal walkthrough", s: "pub" },
+    { d: 10, t: "09:00", p: "TT", hook: "3 things I wish I knew", s: "pub" },
+    { d: 11, t: "13:00", p: "YT", hook: "I stopped chasing invoices", s: "pub" },
+    { d: 11, t: "19:00", p: "LI", hook: "Unpopular opinion", s: "fail" },
+    { d: 14, t: "09:00", p: "TT", hook: "POV: the client finally paid", s: "sch" },
+    { d: 14, t: "18:00", p: "IG", hook: "Your invoice is 34 days late", s: "sch" },
+    { d: 15, t: "09:00", p: "TT", hook: "Day 1 of getting paid on time", s: "pend" },
+    { d: 16, t: "13:00", p: "YT", hook: "The £0 way to never chase", s: "sch" },
+    { d: 17, t: "09:00", p: "TT", hook: "Nobody talks about forecasts", s: "sch" },
+    { d: 18, t: "18:00", p: "IG", hook: "Recurring invoices in 60s", s: "sch" },
+    { d: 21, t: "09:00", p: "TT", hook: "Freelancer money mistakes", s: "sch" },
+  ],
+  automations: [
+    { name: "Daily TikTok + Reels", mode: "continuous", approval: "Approve in Calendar", status: "active", perDay: 2, horizon: 14, times: "09:00, 18:00", accounts: 2, last: "13 Sep, 09:02" },
+    { name: "LinkedIn thought leadership", mode: "continuous", approval: "Approve in Velocity mode", status: "paused", perDay: 1, horizon: 30, times: "08:30", accounts: 1, last: "6 Sep, 08:30" },
+    { name: "Launch week blitz", mode: "one-shot", approval: "Auto-publish", status: "completed", perDay: 3, horizon: 7, times: "09:00, 13:00, 19:00", accounts: 3, last: "1 Sep, 09:00" },
+  ],
+  runs: [
+    { started: "13 Sep, 09:02", status: "done", gen: 4, sch: 4, skip: 0 },
+    { started: "12 Sep, 09:01", status: "done", gen: 2, sch: 4, skip: 0 },
+    { started: "11 Sep, 09:02", status: "done", gen: 4, sch: 3, skip: 1 },
+  ],
+  trends: [
+    { platform: "TikTok", hook: "POV: you finally automated the thing you hated", fmt: "pov_text", views: "2.4M", vel: 90, tags: ["saas", "founder"] },
+    { platform: "TikTok", hook: "Day 1 of marketing my app for 30 days", fmt: "day_in_life", views: "1.8M", vel: 88, tags: ["marketing", "buildinpublic"] },
+    { platform: "TikTok", hook: "3 things I wish I knew before starting my business", fmt: "things_i_wish", views: "1.6M", vel: 82, tags: ["founder", "smallbusiness"] },
+    { platform: "Instagram", hook: "Reacting to my own product reviews", fmt: "green_screen", views: "940k", vel: 70, tags: ["ecommerce"] },
+    { platform: "YouTube", hook: "Before vs after using this app", fmt: "before_after", views: "710k", vel: 65, tags: ["apps"] },
+    { platform: "LinkedIn", hook: "Unpopular opinion: most marketing advice is wrong", fmt: "hot_take", views: "410k", vel: 60, tags: ["b2b"] },
+    { platform: "TikTok", hook: "Things my accountant told me to stop doing", fmt: "list_talking", views: "1.1M", vel: 77, tags: ["finance", "freelance"] },
+    { platform: "Instagram", hook: "The invoice that changed my business", fmt: "story_arc", views: "620k", vel: 58, tags: ["story", "founder"] },
+  ],
+  characters: [
+    { name: "Maya", g: "female", age: "25-34", tags: ["tech", "saas"], tier: "starter", hue: 210 },
+    { name: "Leo", g: "male", age: "25-34", tags: ["fitness", "finance"], tier: "starter", hue: 20 },
+    { name: "Priya", g: "female", age: "18-24", tags: ["beauty", "ecom"], tier: "starter", hue: 300 },
+    { name: "Marcus", g: "male", age: "35-44", tags: ["b2b", "finance"], tier: "growth", hue: 150 },
+    { name: "Sofia", g: "female", age: "25-34", tags: ["travel", "apps"], tier: "growth", hue: 260 },
+    { name: "Ken", g: "male", age: "18-24", tags: ["gaming", "apps"], tier: "growth", hue: 110 },
+    { name: "Amara", g: "female", age: "35-44", tags: ["health", "parenting"], tier: "pro", hue: 340 },
+    { name: "Diego", g: "male", age: "25-34", tags: ["ecommerce"], tier: "pro", hue: 40 },
+    { name: "Nadia (yours)", g: "female", age: "25-34", tags: ["fintech"], tier: "mine", hue: 190 },
+  ],
+  accountsAdmin: [
+    { email: "jabbar@northwindapp.com", plan: "growth", ws: 3, saves: 41, credits: 342, socials: 4, published: 96, keys: 2, status: "active", since: "2 Mar 2026", stripe: "cus_PxA92kd" },
+    { email: "sara@copperleaf.studio", plan: "pro", ws: 7, saves: 318, credits: 1420, socials: 11, published: 742, keys: 4, status: "active", since: "18 Jan 2026", stripe: "cus_Qm31ffa" },
+    { email: "tom@kettlepress.co", plan: "starter", ws: 1, saves: 18, credits: 96, socials: 2, published: 41, keys: 1, status: "dunning", since: "9 Jun 2026", stripe: "cus_Rk88zzz" },
+    { email: "dev@brightbird.io", plan: "growth", ws: 2, saves: 77, credits: 210, socials: 5, published: 188, keys: 3, status: "active", since: "22 Apr 2026", stripe: "cus_Sw01aaa" },
+    { email: "hello@fernandmoss.com", plan: "free", ws: 1, saves: 3, credits: 0, socials: 0, published: 0, keys: 0, status: "active", since: "12 Sep 2026", stripe: "—" },
+    { email: "ops@lumenlabs.ai", plan: "pro", ws: 10, saves: 904, credits: 3180, socials: 18, published: 2104, keys: 6, status: "active", since: "4 Nov 2025", stripe: "cus_Tz44bbb" },
+    { email: "mike@oldpost.studio", plan: "starter", ws: 1, saves: 9, credits: 12, socials: 1, published: 6, keys: 1, status: "suspended", since: "30 Jul 2026", stripe: "cus_Uv77ccc" },
+  ],
+  keysAdmin: [
+    { owner: "jabbar@northwindapp.com", name: "Zapier", prefix: "sk_live_24fA", scopes: ["content:read", "content:write", "publish"], rpm: 300, last: "13 Sep, 13:41", status: "active" },
+    { owner: "jabbar@northwindapp.com", name: "Internal dashboard", prefix: "sk_live_71jA", scopes: ["analytics:read"], rpm: 300, last: "12 Sep, 09:04", status: "active" },
+    { owner: "sara@copperleaf.studio", name: "Agency automation", prefix: "sk_live_9cBz", scopes: ["content:read", "content:write", "publish", "analytics:read"], rpm: 1000, last: "13 Sep, 14:02", status: "active" },
+    { owner: "ops@lumenlabs.ai", name: "MCP agent", prefix: "sk_live_x41Q", scopes: ["content:read", "trends:read"], rpm: 1000, last: "13 Sep, 11:20", status: "active" },
+    { owner: "tom@kettlepress.co", name: "Old key", prefix: "sk_live_ff02", scopes: ["content:read"], rpm: 60, last: "2 Aug, 18:11", status: "revoked" },
+  ],
+  webhooksAdmin: [
+    { owner: "sara@copperleaf.studio", url: "https://hooks.copperleaf.studio/velocity", events: "*", enabled: true },
+    { owner: "jabbar@northwindapp.com", url: "https://northwindapp.com/api/hooks/velocity", events: "post.published, post.failed", enabled: true },
+    { owner: "ops@lumenlabs.ai", url: "https://lumenlabs.ai/ingest/velocity", events: "batch.completed", enabled: false },
+  ],
+  integrations: [
+    { name: "Anthropic (copy & profiles)", ok: true, envs: ["ANTHROPIC_API_KEY"] },
+    { name: "Firecrawl (JS crawling)", ok: true, envs: ["FIRECRAWL_API_KEY"] },
+    { name: "ElevenLabs (voice)", ok: true, envs: ["ELEVENLABS_API_KEY"] },
+    { name: "Talking-head video provider", ok: true, envs: ["VIDEO_PROVIDER_URL", "VIDEO_PROVIDER_KEY"] },
+    { name: "Image generation (fal)", ok: true, envs: ["IMAGE_PROVIDER_URL", "IMAGE_PROVIDER_KEY"] },
+    { name: "TikTok publishing", ok: true, envs: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"] },
+    { name: "Instagram Reels (Meta)", ok: true, envs: ["META_APP_ID", "META_APP_SECRET"] },
+    { name: "YouTube Shorts (Google)", ok: true, envs: ["GOOGLE_YT_CLIENT_ID", "GOOGLE_YT_CLIENT_SECRET"] },
+    { name: "LinkedIn", ok: false, envs: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"] },
+    { name: "Stripe billing", ok: true, envs: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] },
+    { name: "Transactional email (Resend)", ok: true, envs: ["RESEND_API_KEY", "EMAIL_FROM"] },
+    { name: "Storage (s3)", ok: true, envs: ["STORAGE_DRIVER", "S3_*"] },
+    { name: "Token encryption key", ok: true, envs: ["TOKEN_ENCRYPTION_KEY"] },
+  ],
+  audit: [
+    { when: "13 Sep, 14:02", actor: "user", action: "content.keep", meta: '{"item":"c5"}' },
+    { when: "13 Sep, 13:58", actor: "system", action: "post.published", meta: '{"platform":"tiktok"}' },
+    { when: "13 Sep, 13:41", actor: "api key", action: "generate.batch", meta: '{"count":10}' },
+    { when: "13 Sep, 11:15", actor: "admin", action: "admin.grant_credits", meta: '{"account":"tom@…","credits":250}' },
+    { when: "13 Sep, 09:02", actor: "system", action: "automation.run", meta: '{"scheduled":4}' },
+    { when: "12 Sep, 16:44", actor: "user", action: "social.connect", meta: '{"platform":"youtube"}' },
+    { when: "12 Sep, 10:03", actor: "admin", action: "admin.set_plan", meta: '{"plan":"pro"}' },
+  ],
+  commissions: [
+    { date: "11 Sep 2026", code: "jabbar", amount: "$49.00", commission: "$14.70", status: "pending" },
+    { date: "2 Sep 2026", code: "jabbar", amount: "$149.00", commission: "$44.70", status: "approved" },
+    { date: "18 Aug 2026", code: "sara", amount: "$29.00", commission: "$8.70", status: "approved" },
+    { date: "4 Aug 2026", code: "jabbar", amount: "$49.00", commission: "$14.70", status: "paid" },
+    { date: "21 Jul 2026", code: "lumen", amount: "$149.00", commission: "$44.70", status: "paid" },
+  ],
+  costs: [
+    { day: "13 Sep", items: 62, ugc: 21, credits: 380, llm: 145, pub: 18, usd: 6.42 },
+    { day: "12 Sep", items: 48, ugc: 15, credits: 260, llm: 111, pub: 14, usd: 4.71 },
+    { day: "11 Sep", items: 71, ugc: 26, credits: 440, llm: 168, pub: 22, usd: 7.55 },
+    { day: "10 Sep", items: 39, ugc: 11, credits: 180, llm: 89, pub: 12, usd: 3.48 },
+    { day: "9 Sep", items: 55, ugc: 18, credits: 310, llm: 128, pub: 16, usd: 5.36 },
+    { day: "8 Sep", items: 44, ugc: 14, credits: 240, llm: 102, pub: 13, usd: 4.29 },
+    { day: "7 Sep", items: 28, ugc: 8, credits: 140, llm: 64, pub: 9, usd: 2.61 },
+  ],
+  moderation: [{ hook: "Guaranteed 10x returns in 7 days", reasons: "financial_claims" }, { hook: "Lose 20lb with this one trick", reasons: "health_claims" }],
+  failedPosts: [
+    { platform: "LinkedIn", status: "held", err: "Account needs reconnecting (token expired)", when: "13 Sep, 19:00" },
+    { platform: "Instagram", status: "failed", err: "IG container error: media processing failed", when: "11 Sep, 18:00" },
+    { platform: "TikTok", status: "failed", err: "publish failed: spam_risk_too_many_posts", when: "9 Sep, 21:00" },
+  ],
+  notifications: [
+    { t: "Post published", b: "\"I stopped chasing invoices manually\" is live on TikTok", unread: true },
+    { t: "Reconnect needed", b: "Your LinkedIn connection expired; 2 posts are on hold", unread: true },
+    { t: "Automation ran", b: "Daily TikTok + Reels: 4 scheduled, 4 generated", unread: true },
+    { t: "Post published", b: "\"3 things I wish I knew\" is live on Instagram", unread: false },
+  ],
+  faq: [
+    { c: "Getting started", q: "How does it work?", a: "Paste your website URL. Velocity reads your site, builds a Company Profile, and generates a stack of short-form videos, slideshows and memes. You swipe right to keep, left to skip, then schedule to TikTok, Instagram Reels, YouTube Shorts and LinkedIn." },
+    { c: "Getting started", q: "How long does the first batch take?", a: "Analysis of your site takes under a minute, and the first candidates appear in Velocity mode while the rest render in the background." },
+    { c: "Getting started", q: "What if I don't have a website yet?", a: "Fill in the Company Profile manually under Settings → Profile and generate from that." },
+    { c: "Content & quality", q: "Do I need to appear on camera?", a: "No. AI UGC characters deliver your scripts as talking-head videos, or pick from licensed human creator clips with your voiceover." },
+    { c: "Content & quality", q: "Can I edit the content?", a: "Yes — every hook, script and caption is editable in the Studio, and every edit is versioned." },
+    { c: "Content & quality", q: "Do you disclose AI-generated content?", a: "Yes. Videos are flagged as AI-generated where the platform supports it, which is required on TikTok and YouTube." },
+    { c: "Publishing", q: "Which platforms do you publish to?", a: "TikTok, Instagram Reels, YouTube Shorts and LinkedIn, natively via each platform's official API." },
+    { c: "Publishing", q: "What happens if a post fails?", a: "It retries with backoff, and if it still fails you get a notification with the platform's error and a one-click retry in the calendar." },
+    { c: "Plans & billing", q: "What are AI Studio credits?", a: "Credits pay for image and video generation: 4 credits per image, 10 per second of video. Every paid plan includes a monthly allowance." },
+    { c: "Plans & billing", q: "Can I cancel any time?", a: "Yes. Downgrade or cancel from Billing; your content stays in your library and workspaces above the new limit are locked rather than deleted." },
+    { c: "Privacy & data", q: "What do you do with my website content?", a: "We read your public pages to build your Company Profile. We store the profile and the content you generate, never your credentials." },
+    { c: "Privacy & data", q: "Can I delete my data?", a: "Yes. Deleting your account marks it for purge after 30 days." },
+  ],
+  plans: [
+    { id: "free", name: "Free", tag: "Test the waters", price: 0, badge: "", f: ["No credit card", "Velocity mode (swipe)", "10 AI Studio credits", "Limited content", "Browse features"] },
+    { id: "starter", name: "Starter", tag: "If you're just starting out", price: 29, badge: "", f: ["20 content saves", "250 AI Studio credits", "All four platforms", "1 workspace", "25 AI UGC characters", "Velocity mode"] },
+    { id: "growth", name: "Growth", tag: "If you're looking to grow fast", price: 49, badge: "Most popular", f: ["100 content saves", "500 AI Studio credits", "Unlimited socials", "3 workspaces", "500+ AI UGC characters", "100 human UGC videos"] },
+    { id: "pro", name: "Pro", tag: "If you want to 10x your marketing", price: 149, badge: "", f: ["Unlimited content saves", "2000 AI Studio credits", "Unlimited scheduling", "10 workspaces", "2000+ human UGC videos", "Multi-language content"] },
+  ],
+  blog: [
+    { slug: "post-daily", title: "How to post daily on TikTok without burning out", date: "20 Aug 2026", ex: "A batching system that gets founders 30 posts a month in one sitting." },
+    { slug: "ugc", title: "UGC-style content, explained for founders", date: "5 Aug 2026", ex: "Why unpolished, first-person videos outperform polished ads — and how to make them without a creator." },
+    { slug: "attribution", title: "Attribution for social video: what actually works", date: "15 Jul 2026", ex: "Platform links strip UTMs. Here's how to see which posts drive signups anyway." },
+  ],
+};
+const platIcon = { TikTok: "TT", Instagram: "IG", YouTube: "YT", LinkedIn: "LI" };
+const fmtN = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+</script>
+<script>
+/* ============ marketing ============ */
+const mHeader = (active) => `
+<div class="mhead"><div class="in">
+  <div class="row" style="font-weight:800;font-size:17px"><span class="side-mark" style="width:32px;height:32px;border-radius:11px;background:linear-gradient(135deg,var(--brand500),var(--brand700));display:grid;place-items:center;color:#fff">${icon.zap}</span>Velocity</div>
+  <nav class="mnav">${[["Features", "m-home"], ["Tools", "m-tool"], ["Pricing", "m-pricing"], ["FAQ", "m-faq"], ["Blog", "m-blog"], ["API", "m-dev"]].map(([l, p]) => `<a href="#" onclick="go('${p}');return false" style="${active === p ? "color:var(--brand700);font-weight:700" : ""}">${l}</a>`).join("")}</nav>
+  <div class="row"><button class="btn-ghost" onclick="go('m-login')">Log in</button><button class="btn-primary" onclick="go('m-login')">Start free</button></div>
+</div></div>`;
+
+const mFooter = () => `
+<div class="mfoot"><div class="cols">
+  <div><div class="row" style="font-weight:800;font-size:17px"><span style="width:32px;height:32px;border-radius:11px;background:linear-gradient(135deg,var(--brand500),var(--brand700));display:grid;place-items:center;color:#fff">${icon.zap}</span>Velocity</div>
+    <p class="mt2 muted" style="max-width:260px">AI marketing on autopilot. Paste a URL, get a month of content, swipe, schedule, grow.</p>
+    <div class="row mt4 muted" style="gap:14px"><a href="#" onclick="return false">X</a><a href="#" onclick="return false">LinkedIn</a><a href="#" onclick="return false">TikTok</a><a href="#" onclick="return false">Discord</a></div></div>
+  ${[["Product", [["Features", "m-home"], ["Pricing", "m-pricing"], ["FAQ", "m-faq"], ["API & MCP", "m-dev"], ["Affiliates", "m-aff"]]],
+     ["Tools", [["AI UGC generator", "m-tool"], ["TikTok slideshow maker", "m-tool"], ["AI meme generator", "m-tool"], ["Social scheduler", "m-tool"], ["Trend remix", "m-tool"]]],
+     ["Compare", [["vs Buffer", "m-compare"], ["vs Later", "m-compare"], ["vs Hootsuite", "m-compare"], ["For SaaS", "m-industry"], ["For e-commerce", "m-industry"]]],
+     ["Company", [["Blog", "m-blog"], ["Contact & directions", "m-contact"], ["Careers", "m-contact"], ["Privacy policy", "m-privacy"], ["Terms of service", "m-privacy"]]]]
+    .map(([h, ls]) => `<div><div style="font-weight:700;margin-bottom:12px">${h}</div><ul>${ls.map(([l, p]) => `<li><a href="#" onclick="go('${p}');return false">${l}</a></li>`).join("")}</ul></div>`).join("")}
+</div>
+<div class="mwrap" style="padding-bottom:32px;font-size:11.5px;color:#94a3b8;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><span>© 2026 Velocity. All rights reserved.</span><span>Not affiliated with TikTok, Meta, Google or LinkedIn.</span></div></div>`;
+
+const swipeCard = (i) => { const c = DATA.stack[i % DATA.stack.length]; return `
+<div class="phone ${c.grad}">
+  <span class="badge" style="align-self:flex-start;background:rgba(255,255,255,.22);color:#fff">${c.format}</span>
+  <div><div style="font-size:30px;font-weight:800;line-height:1.06">${c.hook}</div>
+    <p style="margin-top:10px;font-size:12.5px;opacity:.75">Generated from northwindapp.com</p></div>
+  <div style="display:flex;justify-content:space-between">
+    <button class="circle" style="background:rgba(255,255,255,.16);color:#fff" onclick="demoSwipe(-1)">✕</button>
+    <button class="circle" style="background:#fff;color:var(--brand700)" onclick="demoSwipe(1)">♥</button></div>
+</div>`; };
+let demoIdx = 0, demoKept = 0;
+function demoSwipe(dir) { if (dir > 0) demoKept++; demoIdx++; const el = document.getElementById("demoCard"); if (el) { el.innerHTML = swipeCard(demoIdx); const k = document.getElementById("demoKept"); if (k) k.textContent = demoKept; } }
+
+const pages = {};
+
+pages["m-home"] = () => `${mHeader("m-home")}
+<div class="hero-bg"><div class="mwrap" style="display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;padding-top:76px;padding-bottom:64px">
+  <div>
+    <span class="eyebrow">${icon.sparkle} Marketing for people who'd rather build</span>
+    <h1 style="font-size:56px;line-height:1.02;margin-top:20px">Your marketing, <span class="grad-text">done while you build.</span></h1>
+    <p class="mt4 muted" style="font-size:17px;max-width:520px">Paste your website URL. Velocity generates a month of TikToks, Reels, Shorts and LinkedIn posts, you swipe to approve, and it schedules and publishes everything.</p>
+    <div class="wrap mt6"><button class="btn-primary" style="padding:14px 24px;font-size:15px" onclick="go('m-login')">Generate my first 30 posts ${icon.arrow}</button><button class="btn-secondary" style="padding:14px 24px;font-size:15px" onclick="go('m-pricing')">See pricing</button></div>
+    <div class="wrap mt4" style="gap:20px;font-size:12px;color:var(--muted)">${["No credit card", "10 AI Studio credits included", "Cancel any time"].map(t => `<span class="row" style="gap:6px"><span style="color:var(--accent500)">${icon.check}</span>${t}</span>`).join("")}</div>
+  </div>
+  <div style="display:grid;justify-items:center;gap:10px"><div id="demoCard">${swipeCard(0)}</div><div class="muted" style="font-size:12px">Try it: swipe right to keep · <b id="demoKept">0</b> kept</div></div>
+</div></div>
+
+<div class="section" style="border-top:1px solid #f1f5f9"><div class="mwrap">
+  <span class="eyebrow">How it works</span><h2 class="mt4" style="font-size:34px">From URL to published in four steps</h2>
+  <div class="tiles mt6">${[["01", "Paste your URL", "We read your site and build a Company Profile: audience, tone, features, hooks.", icon.wand],
+    ["02", "Get a month of content", "AI UGC videos, slideshows, hook + demo clips, memes and trend remixes — all on-brand.", icon.video],
+    ["03", "Swipe to approve", "Velocity mode: right to keep, left to skip. Approve 30 posts in five minutes.", icon.zap],
+    ["04", "Schedule & grow", "Native publishing to TikTok, Reels, Shorts and LinkedIn with analytics and attribution.", icon.cal]]
+    .map(([n, t, d, ic]) => `<div class="card hover" style="padding:22px"><div class="row" style="justify-content:space-between"><span style="width:40px;height:40px;border-radius:12px;background:var(--brand50);color:var(--brand700);display:grid;place-items:center">${ic}</span><span style="font-size:12px;font-weight:800;color:#cbd5e1">${n}</span></div><h3 class="mt4" style="font-size:15px">${t}</h3><p class="mt2 muted" style="font-size:13px">${d}</p></div>`).join("")}</div>
+</div></div>
+
+<div class="section" style="background:#f8fafc;border-top:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9"><div class="mwrap">
+  <span class="eyebrow">Features</span><h2 class="mt4" style="font-size:34px">Everything a growth team does, on autopilot</h2>
+  <div class="tiles mt6">${[[icon.users, "AI UGC characters", "Talking-head videos from your script — pick a synthetic creator or make your own."],
+    [icon.img, "Human UGC library", "Licensed creator clips with your voiceover and captions."],
+    [icon.sparkle, "Trend remix", "Trending formats ranked by fit for your brand, remixable in one click."],
+    [icon.zap, "Velocity mode", "The fastest approval flow in marketing. Swipe, keyboard or touch."],
+    [icon.cal, "Native scheduling", "Best-time queues, drag-and-drop calendar, retries and reconnect alerts."],
+    [icon.bot, "Automations", "Set a cadence and format mix; your calendar fills itself every week."],
+    [icon.chart, "Analytics + attribution", "Views, breakouts, and which posts drove signups on your site."],
+    [icon.wand, "AI Studio", "Consistent AI influencers, image and video generation on credits."],
+    [icon.code, "API & MCP", "Generate, approve and schedule from your own code or AI agents."]]
+    .map(([ic, t, d]) => `<div class="card hover" style="padding:22px"><span style="width:40px;height:40px;border-radius:12px;background:var(--brand50);color:var(--brand700);display:grid;place-items:center">${ic}</span><h3 class="mt4" style="font-size:15px">${t}</h3><p class="mt2 muted" style="font-size:13px">${d}</p></div>`).join("")}</div>
+</div></div>
+
+<div class="section"><div class="mwrap tiles">${[["Ana R.", "Founder, indie SaaS", "I went from posting nothing to 5 videos a week in an afternoon. The swipe flow is weirdly addictive."],
+  ["Tom K.", "Solo app developer", "The Company Profile nailed my positioning better than I did. Scheduling to Shorts and TikTok from one place is the killer feature."],
+  ["Priya S.", "E-commerce owner", "Trend remixes got my first 100k-view video. Attribution finally shows which posts drive checkouts."]]
+  .map(([n, r, t]) => `<figure class="card" style="padding:22px;margin:0"><blockquote style="margin:0;font-size:15px;color:#334155">“${t}”</blockquote><figcaption class="row mt4"><span class="avatar" style="width:36px;height:36px;border-radius:50%;font-size:13px">${n[0]}</span><span style="font-size:13px"><b>${n}</b><br><span class="muted">${r}</span></span></figcaption></figure>`).join("")}</div></div>
+
+<div class="section" style="background:#f8fafc;border-top:1px solid #f1f5f9"><div class="mwrap" style="text-align:center">
+  <span class="eyebrow">Pricing</span><h2 class="mt4" style="font-size:34px">Start free. Upgrade when you publish.</h2>
+  <div class="mt6">${priceGrid()}</div></div></div>
+
+<div class="section" style="background:linear-gradient(135deg,var(--brand900),var(--brand700));color:#fff;text-align:center">
+  <div class="mwrap"><h2 style="font-size:34px">Ready to stop procrastinating on marketing?</h2>
+  <p class="mt2" style="opacity:.8">Your first 30 posts are free. No card, no setup call.</p>
+  <button class="mt6" style="background:#fff;color:var(--brand700);border-radius:12px;padding:14px 26px;font-weight:700;font-size:15px" onclick="go('m-login')">Start free →</button></div></div>
+${mFooter()}`;
+
+function priceGrid(cur) {
+  return `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;text-align:left">${DATA.plans.map(p => `
+    <div class="card" style="padding:22px;display:flex;flex-direction:column;${p.badge ? "outline:2px solid var(--brand600)" : ""}">
+      ${p.badge ? `<span class="badge dark" style="align-self:flex-start;background:var(--brand600);margin-bottom:8px">${p.badge}</span>` : ""}
+      <h3 style="font-size:19px">${p.name}</h3><p class="muted" style="font-size:12.5px">${p.tag}</p>
+      <div class="mt4"><span style="font-size:36px;font-weight:800">$${p.price}</span><span class="muted">/mo</span></div>
+      <ul style="list-style:none;padding:0;margin:16px 0 0;display:grid;gap:8px;font-size:13px;flex:1">${p.f.map(f => `<li class="row" style="gap:8px;align-items:flex-start"><span style="color:var(--brand600)">${icon.check}</span>${f}</li>`).join("")}</ul>
+      <button class="${p.badge ? "btn-primary" : "btn-secondary"} mt4" ${cur === p.id ? 'disabled style="opacity:.5"' : ""} onclick="${cur ? "toast('Plan changed to " + p.name + " (prototype)')" : "go('m-login')"}">${cur === p.id ? "Current plan" : p.price === 0 ? "Start free" : "Get " + p.name}</button>
+    </div>`).join("")}</div>`;
+}
+
+pages["m-pricing"] = () => `${mHeader("m-pricing")}<div class="mwrap" style="padding:64px 16px">
+  <h1 style="font-size:40px;text-align:center">Pricing that grows with you</h1>
+  <p class="muted mt2" style="text-align:center">All plans include Velocity mode and native publishing. Credits: 4 per image, 10 per second of video.</p>
+  <div class="row mt6" style="justify-content:center;gap:12px;font-size:13px"><b>Monthly</b><span style="width:44px;height:24px;border-radius:99px;background:#cbd5e1;position:relative;display:inline-block"><i style="position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff"></i></span><span class="muted">Yearly <span class="badge green">Save 20%</span></span></div>
+  <div class="mt6">${priceGrid()}</div>
+  <h2 class="mt6" style="font-size:22px">Compare plans</h2>
+  <div class="card mt4" style="overflow:hidden"><table class="tbl"><thead><tr><th>Feature</th><th>Free</th><th>Starter</th><th>Growth</th><th>Pro</th></tr></thead><tbody>
+  ${[["Content saves", "3", "20", "100", "Unlimited"], ["Candidates per day", "20", "150", "400", "1000"], ["AI Studio credits / mo", "10", "250", "500", "2000"], ["Workspaces", "1", "1", "3", "10"], ["Social accounts per platform", "—", "1", "Unlimited", "Unlimited"], ["Scheduling", "—", "✓", "✓", "✓"], ["Trend remix", "—", "✓", "✓", "✓"], ["Human UGC clips / mo", "—", "—", "100", "2000"], ["Multi-language", "—", "—", "—", "✓"], ["API rate limit (rpm)", "—", "60", "300", "1000"], ["Team members", "—", "✓", "✓", "✓"]]
+    .map(r => `<tr><td style="font-weight:600">${r[0]}</td>${r.slice(1).map(c => `<td style="text-align:center">${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+</div>${mFooter()}`;
+
+pages["m-faq"] = () => { const cats = [...new Set(DATA.faq.map(f => f.c))]; return `${mHeader("m-faq")}<div class="mwrap" style="max-width:840px;padding:64px 16px">
+  <span class="eyebrow">Support</span><h1 class="mt4" style="font-size:40px">Frequently asked questions</h1>
+  <p class="muted mt2" style="font-size:16px">Everything people ask before they start. Still stuck? <a style="color:var(--brand700);text-decoration:underline" href="#" onclick="go('m-contact');return false">Talk to us</a>.</p>
+  <div class="wrap mt4">${cats.map(c => `<span class="badge">${c}</span>`).join("")}</div>
+  ${cats.map(c => `<section class="mt6"><h2 style="font-size:19px">${c}</h2><div class="card mt2" style="padding:0 20px">${DATA.faq.filter(f => f.c === c).map(f => `<details><summary>${f.q}<span class="muted">+</span></summary><p>${f.a}</p></details>`).join("")}</div></section>`).join("")}
+  <div class="card mt6" style="padding:24px;background:var(--brand50);border-color:var(--brand100)"><h2 style="font-size:17px">Still deciding?</h2><p class="mt2">See <a style="text-decoration:underline" href="#" onclick="go('m-pricing');return false">plans and limits</a>, read how we compare to <a style="text-decoration:underline" href="#" onclick="go('m-compare');return false">Buffer</a>, or browse the <a style="text-decoration:underline" href="#" onclick="go('m-tool');return false">AI UGC generator</a>.</p><button class="btn-primary mt4" onclick="go('m-login')">Start free — no card</button></div>
+  ${shareRow()}
+</div>${mFooter()}`; };
+
+const shareRow = () => `<div class="row mt6 wrap" style="border-top:1px solid #f1f5f9;padding-top:22px"><span class="muted" style="font-weight:600">Share</span>${["X", "LinkedIn", "Facebook", "WhatsApp", "Email", "Copy link"].map(s => `<button class="btn-secondary sm" onclick="toast('Shared to ${s} (prototype)')">${s}</button>`).join("")}</div>`;
+
+pages["m-tool"] = () => `${mHeader("m-tool")}<div class="mwrap" style="max-width:780px;padding:64px 16px">
+  <span class="eyebrow">Free tool</span><h1 class="mt4" style="font-size:40px">AI UGC Video Generator</h1>
+  <p class="muted mt4" style="font-size:17px">Turn a script into a talking-head UGC-style video with a realistic AI character — no camera, no editing.</p>
+  <ul style="list-style:none;padding:0;margin:24px 0;display:grid;gap:10px">${["1,000+ AI characters", "Auto captions and hooks", "Publish to TikTok, Reels, Shorts"].map(b => `<li class="row"><span style="color:var(--accent500)">${icon.check}</span>${b}</li>`).join("")}</ul>
+  <div class="wrap"><button class="btn-primary" onclick="go('m-login')">Try it free ${icon.arrow}</button><button class="btn-secondary" onclick="go('m-pricing')">See pricing</button></div>
+  <section class="mt6"><h2 style="font-size:22px">Why founders use it</h2><p class="muted mt2">Short-form video is the highest-leverage organic channel for early-stage products, but production time kills consistency. Generating from your website removes the blank page.</p></section>
+  <section class="mt6"><h2 style="font-size:22px">Publish everywhere</h2><p class="muted mt2">Every output is 9:16, captioned and ready for TikTok, Instagram Reels, YouTube Shorts and LinkedIn.</p></section>
+  <div class="card mt6" style="padding:22px;background:#f8fafc"><h2 style="font-size:15px">How it works with Velocity</h2><ol class="muted mt2" style="padding-left:18px;font-size:13px;display:grid;gap:4px"><li>Paste your website URL to build a Company Profile.</li><li>Generate a batch of on-brand content.</li><li>Approve fast in Velocity mode.</li><li>Schedule natively to four platforms.</li></ol></div>
+  <section class="mt6"><h2 style="font-size:15px;font-weight:700">Related</h2><div class="grid mt2" style="grid-template-columns:1fr 1fr">${["TikTok Slideshow Maker", "AI Meme Generator", "Social Media Scheduler", "Trend Remix", "Velocity vs Buffer", "For SaaS"].map(l => `<a class="card hover" style="padding:12px 16px;font-weight:600;font-size:13px;display:flex;justify-content:space-between" href="#" onclick="go('m-tool');return false">${l}<span class="muted">${icon.arrow}</span></a>`).join("")}</div></section>
+  ${shareRow()}
+</div>${mFooter()}`;
+
+pages["m-compare"] = () => `${mHeader("m-compare")}<div class="mwrap" style="max-width:780px;padding:64px 16px">
+  <span class="eyebrow">Comparison</span><h1 class="mt4" style="font-size:40px">Velocity vs Buffer</h1>
+  <p class="muted mt4" style="font-size:17px">Buffer schedules content you already have. Velocity generates the content, then schedules it.</p>
+  <div class="wrap mt6"><button class="btn-primary" onclick="go('m-login')">Switch to Velocity ${icon.arrow}</button><button class="btn-secondary" onclick="go('m-pricing')">See pricing</button></div>
+  ${[["Content generation", "Velocity generates AI UGC, slideshows, hook + demo videos, memes and trend remixes from your website. With Buffer, you bring your own content."], ["Approval speed", "Velocity mode lets you approve a month of posts in minutes with swipe or keyboard."], ["Publishing", "Native publishing to TikTok, Instagram Reels, YouTube Shorts and LinkedIn with best-time queues and attribution."]].map(([h, p]) => `<section class="mt6"><h2 style="font-size:22px">${h}</h2><p class="muted mt2">${p}</p></section>`).join("")}
+  ${shareRow()}</div>${mFooter()}`;
+
+pages["m-industry"] = () => `${mHeader("m-industry")}<div class="mwrap" style="max-width:780px;padding:64px 16px">
+  <span class="eyebrow">Industry</span><h1 class="mt4" style="font-size:40px">AI marketing for SaaS</h1>
+  <p class="muted mt4" style="font-size:17px">Explain features as founder stories and demos that convert trial signups.</p>
+  <ul style="list-style:none;padding:0;margin:24px 0;display:grid;gap:10px">${["On-brand angles from your website", "Formats that work for your audience", "Publish daily without a team"].map(b => `<li class="row"><span style="color:var(--accent500)">${icon.check}</span>${b}</li>`).join("")}</ul>
+  <button class="btn-primary" onclick="go('m-login')">Try it free ${icon.arrow}</button>${shareRow()}</div>${mFooter()}`;
+
+pages["m-blog"] = () => `${mHeader("m-blog")}<div class="mwrap" style="max-width:780px;padding:64px 16px">
+  <h1 style="font-size:40px">Blog</h1>
+  <div class="grid mt6">${DATA.blog.map(b => `<a class="card hover" style="padding:22px;display:block" href="#" onclick="go('m-post');return false"><div class="muted" style="font-size:11.5px">${b.date}</div><h2 class="mt2" style="font-size:19px">${b.title}</h2><p class="muted mt2">${b.ex}</p></a>`).join("")}</div>
+</div>${mFooter()}`;
+
+pages["m-post"] = () => `${mHeader("m-blog")}<div class="mwrap" style="max-width:720px;padding:64px 16px">
+  <div class="muted" style="font-size:11.5px">20 Aug 2026</div><h1 class="mt2" style="font-size:38px">How to post daily on TikTok without burning out</h1>
+  ${["Consistency beats virality. The founders who grow on short-form are the ones who post daily for months, not the ones who chase a single hit.", "The trick is separating generation from approval. Generate a large batch of angles at once, then approve in a single fast session, then let scheduling handle the rest.", "Velocity mode is built around exactly this loop: swipe through candidates, keep the good ones, and your calendar fills itself."].map(t => `<p class="mt4" style="font-size:16.5px;color:#334155">${t}</p>`).join("")}
+  <section class="mt6"><h2 style="font-size:15px;font-weight:700">Keep reading</h2><div class="grid mt2" style="grid-template-columns:1fr 1fr">${DATA.blog.slice(1).map(b => `<a class="card hover" style="padding:12px 16px;font-weight:600;font-size:13px" href="#" onclick="go('m-post');return false">${b.title}</a>`).join("")}</div></section>
+  ${shareRow()}</div>${mFooter()}`;
+
+pages["m-dev"] = () => `${mHeader("m-dev")}<div class="mwrap" style="max-width:780px;padding:64px 16px">
+  <h1 style="font-size:40px">API &amp; MCP</h1>
+  <p class="muted mt2">Everything in the app is available programmatically. Create an API key under Settings → API (paid plans).</p>
+  <h2 class="mt6" style="font-size:22px">REST API</h2><p class="muted mt2">Base URL <code style="background:#f1f5f9;padding:2px 6px;border-radius:5px">https://app.velocity.com/api/v1</code>. OpenAPI spec at <code>/api/v1/openapi</code>.</p>
+  <pre class="card mt2" style="background:#0f172a;color:#e2e8f0;padding:16px;border-radius:12px;overflow-x:auto;font-size:12px">curl -X POST $API/workspaces/WS_ID/generate \\
+  -H "Authorization: Bearer sk_live_..." -H "content-type: application/json" \\
+  -d '{"count": 10, "formats": ["ai_ugc","slideshow"]}'
+
+# → {"batch_id":"...","status":"queued"}   then GET /api/v1/batches/BATCH_ID</pre>
+  <h2 class="mt6" style="font-size:22px">MCP server</h2><p class="muted mt2">Connect AI agents (Claude, Cursor) with the remote MCP endpoint and your API key.</p>
+  <pre class="card mt2" style="background:#0f172a;color:#e2e8f0;padding:16px;border-radius:12px;overflow-x:auto;font-size:12px">{
+  "mcpServers": { "velocity": { "url": "https://app.velocity.com/api/mcp",
+    "headers": { "Authorization": "Bearer sk_live_..." } } }
+}</pre>
+  <p class="muted mt2" style="font-size:13px">Tools: list_workspaces, get_company_profile, generate_content, get_batch, list_content, get_content, list_social_accounts, schedule_post, publish_now, list_scheduled_posts, get_analytics, list_trends, get_credits.</p>
+  <h2 class="mt6" style="font-size:22px">Website tracking</h2>
+  <pre class="card mt2" style="background:#0f172a;color:#e2e8f0;padding:16px;border-radius:12px;overflow-x:auto;font-size:12px">&lt;script async src="https://app.velocity.com/t.js" data-site="vt_8fk21d"&gt;&lt;/script&gt;
+&lt;script&gt;velocity.track('purchase', { value: 49, currency: 'USD' });&lt;/script&gt;</pre>
+</div>${mFooter()}`;
+
+pages["m-aff"] = () => `${mHeader("m-aff")}<div class="mwrap" style="max-width:780px;padding:64px 16px">
+  <h1 style="font-size:40px">Earn 30% lifetime commission</h1>
+  <p class="muted mt4" style="font-size:17px">Refer founders and creators. You earn 30% of every payment they make, for as long as they stay subscribed.</p>
+  <ul style="list-style:none;padding:0;margin:24px 0;display:grid;gap:10px">${["30% recurring, lifetime", "60-day cookie", "Monthly payouts, $50 minimum", "Real-time dashboard"].map(b => `<li class="row"><span style="color:var(--accent500)">${icon.check}</span>${b}</li>`).join("")}</ul>
+  <button class="btn-primary" onclick="go('a-affiliate')">Join the program ${icon.arrow}</button></div>${mFooter()}`;
+
+pages["m-contact"] = () => `${mHeader("m-contact")}<div class="mwrap" style="padding:64px 16px">
+  <span class="eyebrow">Contact</span><h1 class="mt4" style="font-size:40px">Talk to a human</h1>
+  <p class="muted mt2" style="font-size:16px;max-width:640px">Sales, partnerships and support. We reply within one business day. For quick answers try the <a style="color:var(--brand700);text-decoration:underline" href="#" onclick="go('m-faq');return false">FAQ</a>.</p>
+  <div class="grid mt6" style="grid-template-columns:1fr 1.1fr">
+    <div class="grid">
+      <div class="card" style="padding:24px"><h2 style="font-size:17px">Our office</h2>
+        <div class="grid mt4" style="gap:12px;font-size:13.5px">
+          <div class="row" style="align-items:flex-start"><span style="color:var(--brand600)">${icon.pin}</span><span>Unit 4, Barrow Court<br>Aylesham Business Park<br>Aylesham, Kent CT3 3EF<br>United Kingdom</span></div>
+          <div class="row"><span style="color:var(--brand600)">${icon.phone}</span>+44 20 3900 0000</div>
+          <div class="row"><span style="color:var(--brand600)">${icon.mail}</span>hello@velocity.example</div>
+          <div class="row"><span style="color:var(--brand600)">${icon.clock}</span>Mon–Fri, 9:00–17:30 GMT</div>
+        </div>
+        <div class="wrap mt4"><button class="btn-primary" onclick="toast('Opening directions (prototype)')">${icon.nav} Get directions</button><button class="btn-secondary" onclick="toast('Google Maps (prototype)')">Google Maps</button><button class="btn-secondary" onclick="toast('Apple Maps (prototype)')">Apple Maps</button></div>
+      </div>
+      <div class="card" style="padding:24px"><h2 style="font-size:17px">Getting here</h2>
+        <div class="grid mt4" style="gap:14px;font-size:13.5px;color:var(--muted)">
+          <div class="row" style="align-items:flex-start"><span style="color:var(--brand600)">${icon.train}</span><span><b style="color:var(--ink)">By train</b><br>Aylesham station is a 10-minute walk: turn right onto Station Road, left at the roundabout, business park 300m on your right.</span></div>
+          <div class="row" style="align-items:flex-start"><span style="color:var(--brand600)">${icon.car}</span><span><b style="color:var(--ink)">By car</b><br>From the A2 take the Aylesham exit and follow signs for the business park. Free visitor parking; sat-nav CT3 3EF.</span></div>
+        </div></div>
+    </div>
+    <div class="grid">
+      <div class="card" style="overflow:hidden"><div class="mapbox"><div class="grid-lines"></div><div class="pin"><div class="dot"></div><div style="margin-top:8px;background:#fff;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,.15)">Velocity HQ</div></div></div>
+        <div class="row" style="justify-content:space-between;padding:12px 16px;font-size:11.5px;color:var(--muted)"><span>Unit 4, Barrow Court, Aylesham, Kent CT3 3EF</span><span style="color:var(--brand700);text-decoration:underline">Larger map</span></div></div>
+      <div class="card" style="padding:24px"><h2 style="font-size:17px">Send a message</h2>
+        <div class="grid mt4" style="grid-template-columns:1fr 1fr"><div><label class="label">Name</label><input class="input" value="Sara Whitfield"></div><div><label class="label">Email</label><input class="input" value="sara@copperleaf.studio"></div></div>
+        <div class="mt4"><label class="label">Topic</label><select class="input"><option>Sales</option><option>Support</option><option>Partnerships</option><option>Press</option></select></div>
+        <div class="mt4"><label class="label">Message</label><textarea class="input" rows="4">We run 6 client brands and want to know about agency pricing.</textarea></div>
+        <button class="btn-primary mt4" onclick="toast('Message sent (prototype)')">Send message</button></div>
+    </div>
+  </div>${shareRow()}</div>${mFooter()}`;
+
+pages["m-privacy"] = () => `${mHeader("m-privacy")}<div class="mwrap" style="max-width:760px;padding:64px 16px">
+  <span class="eyebrow">Legal</span><h1 class="mt4" style="font-size:40px">Privacy policy</h1>
+  <p class="muted mt2" style="font-size:12.5px">Last updated 13 September 2026</p>
+  <div class="card mt4" style="padding:14px 18px;background:#fffbeb;border-color:#fde68a;font-size:13px;color:#92400e">This policy is a thorough starting point written for this product, not legal advice. Have your counsel review it before launch.</div>
+  <div class="card mt6" style="padding:20px"><div class="label">On this page</div><ol style="columns:2;font-size:13px;color:var(--brand700);padding-left:18px;margin:0">${["Who we are", "What we collect", "How we use it", "Legal bases", "Sub-processors", "Retention", "Security", "Your rights", "Cookies", "International transfers", "Children", "Changes"].map(s => `<li>${s}</li>`).join("")}</ol></div>
+  ${[["Who we are", "Velocity is operated from Unit 4, Barrow Court, Aylesham, Kent CT3 3EF, United Kingdom. For any privacy question email hello@velocity.example."],
+     ["What we collect", "Account data; content data (the website URL you submit, the Company Profile generated from it, brand assets and generated content); connection data (encrypted access tokens for social accounts); usage data; billing data held by Stripe; and, if you install the tracking snippet, visitor events on your own website."],
+     ["How we use it", "To provide the service, enforce plan limits, bill you, send transactional email and keep the service secure. We do not sell personal data."],
+     ["Legal bases", "Contract, legitimate interests, consent and legal obligation."],
+     ["Sub-processors", "Hosting and database providers, an LLM provider, optional speech/video/image providers, Stripe, an email provider, and the social platforms you connect."],
+     ["Retention", "Content is kept while your account is active; deletion purges after 30 days. Tracking events are retained for 13 months; audit logs for 24 months."],
+     ["Security", "Social tokens are encrypted at rest with AES-256-GCM; API keys are stored hashed and shown once; all traffic is TLS."],
+     ["Your rights", "Access, correct, export or delete your data, object to processing and withdraw consent. Most is self-service; anything else, email us."]]
+    .map(([h, t], i) => `<section class="mt6"><h2 style="font-size:19px">${i + 1}. ${h}</h2><p class="mt2" style="color:#334155">${t}</p></section>`).join("")}
+</div>${mFooter()}`;
+
+pages["m-404"] = () => `<div class="hero-bg" style="min-height:calc(100vh - 94px);display:grid;place-items:center;padding:40px 16px"><div style="text-align:center;max-width:520px">
+  <div style="width:56px;height:56px;margin:0 auto;border-radius:16px;background:linear-gradient(135deg,var(--brand500),var(--brand700));display:grid;place-items:center;color:#fff">${icon.zap}</div>
+  <p class="eyebrow mt6">404</p><h1 class="mt4" style="font-size:38px">This page took a wrong turn.</h1>
+  <p class="muted mt2">The link may be out of date, or the page may have moved. Here are a few places that usually help.</p>
+  <div class="grid mt6" style="grid-template-columns:repeat(3,1fr)">${[[icon.home, "Home", "m-home"], [icon.search, "FAQ", "m-faq"], [icon.life, "Contact", "m-contact"]].map(([ic, l, p]) => `<button class="card hover" style="padding:18px" onclick="go('${p}')"><div style="color:var(--brand600);display:grid;place-items:center">${ic}</div><div class="mt2" style="font-weight:700">${l}</div></button>`).join("")}</div>
+  <p class="muted mt6" style="font-size:12px">Popular: <a style="text-decoration:underline" href="#" onclick="go('m-pricing');return false">Pricing</a> · <a style="text-decoration:underline" href="#" onclick="go('m-tool');return false">AI UGC generator</a> · <a style="text-decoration:underline" href="#" onclick="go('m-blog');return false">Blog</a> · <a style="text-decoration:underline" href="#" onclick="go('a-velocity');return false">Open the app</a></p>
+</div></div>`;
+
+pages["m-login"] = () => `<div style="min-height:calc(100vh - 94px);display:grid;place-items:center;background:#f8fafc;padding:40px 16px">
+  <div class="card" style="width:100%;max-width:420px;padding:32px">
+    <div class="row" style="font-weight:800;font-size:17px"><span style="width:32px;height:32px;border-radius:11px;background:linear-gradient(135deg,var(--brand500),var(--brand700));display:grid;place-items:center;color:#fff">${icon.zap}</span>Velocity</div>
+    <h1 class="mt6" style="font-size:24px">Sign in or create an account</h1>
+    <p class="muted mt2" style="font-size:13px">No password needed — we'll email you a magic link.</p>
+    <input class="input mt6" value="jabbar@northwindapp.com">
+    <button class="btn-primary mt2" style="width:100%" onclick="go('a-onboarding')">Continue with email</button>
+    <button class="btn-secondary mt2" style="width:100%" onclick="go('a-velocity')">Continue with Google</button>
+    <p class="muted mt6" style="font-size:11.5px">By continuing you agree to our <a style="text-decoration:underline" href="#" onclick="go('m-privacy');return false">Terms</a> and <a style="text-decoration:underline" href="#" onclick="go('m-privacy');return false">Privacy policy</a>.</p>
+  </div></div>`;
+</script>
+<script>
+/* ============ app shell ============ */
+const NAV = [
+  ["Create", [["a-velocity", icon.zap, "Velocity mode"], ["a-studio", icon.film, "Studio"], ["a-content", icon.folder, "Content"], ["a-trends", icon.flame, "Trends"], ["a-characters", icon.users, "Characters"]]],
+  ["Publish", [["a-calendar", icon.cal, "Calendar"], ["a-automations", icon.bot, "Automations"], ["a-analytics", icon.chart, "Analytics"]]],
+  ["Account", [["a-set-profile", icon.gear, "Settings"], ["a-set-billing", icon.card, "Billing"], ["a-set-api", icon.link, "API & webhooks"], ["a-affiliate", icon.sparkle, "Affiliate"]]],
+];
+const SETTINGS_TABS = [["a-set-profile", "Profile & workspace"], ["a-set-socials", "Social accounts"], ["a-set-billing", "Billing"], ["a-set-members", "Team"], ["a-set-api", "API keys"], ["a-set-tracking", "Website tracking"]];
+
+function shell(active, body, opts = {}) {
+  const d = DATA, pct = Math.round(100 * d.account.saves / d.account.savesLimit);
+  const settingsActive = active.startsWith("a-set-");
+  return `<div class="shell">
+  <aside class="side">
+    <div class="brand"><span class="mark">${icon.zap}</span>Velocity</div>
+    <div style="position:relative;padding:0 2px 6px"><select class="input" style="padding-left:34px;font-weight:600">${d.workspaces.map(w => `<option${w === d.workspace.name ? " selected" : ""}>${w}</option>`).join("")}<option>+ New workspace</option></select>
+      <span style="position:absolute;left:14px;top:10px;color:#94a3b8">${icon.building}</span></div>
+    <nav style="flex:1;overflow:auto">${NAV.map(([g, items]) => `<div class="grp">${g}</div>${items.map(([p, ic, l]) => `<button class="nav ${active === p || (p === "a-set-profile" && settingsActive) ? "on" : ""}" onclick="go('${p}')">${ic}${l}</button>`).join("")}`).join("")}
+      <div class="grp">Platform</div><button class="nav ${active.startsWith("ad-") ? "on" : ""}" onclick="go('ad-overview')">${icon.shield}Admin panel</button></nav>
+    <div class="plancard">
+      <div class="row" style="justify-content:space-between;font-size:12px"><b>${d.account.plan} plan</b><span style="background:rgba(255,255,255,.16);border-radius:99px;padding:2px 10px;font-weight:700;cursor:pointer" onclick="go('a-set-billing')">Upgrade</span></div>
+      <div class="row mt4" style="justify-content:space-between;font-size:11px;opacity:.75"><span>Content saves</span><span>${d.account.saves}/${d.account.savesLimit}</span></div>
+      <div class="pill-progress mt2" style="background:rgba(255,255,255,.16)"><i style="width:${pct}%;background:var(--accent400)"></i></div>
+      <div class="row mt2" style="justify-content:space-between;font-size:11px;opacity:.75"><span>AI Studio credits</span><b style="opacity:1;color:#fff">${d.account.credits}</b></div>
+    </div>
+  </aside>
+  <div>
+    <div class="topbar">
+      <div class="row" style="font-size:13px;font-weight:600;color:#334155"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent500)"></span>${d.workspace.name}</div>
+      <button class="searchbtn" onclick="toast('Command palette (⌘K) — prototype')">${icon.search}Jump to…<span class="kbd">⌘K</span></button>
+      <button class="btn-primary sm" onclick="go('a-studio')">${icon.plus} Create</button>
+      <button class="btn-ghost" style="position:relative" onclick="toggleNotif()">${icon.bell}<span style="position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:99px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center;padding:0 4px">3</span></button>
+      <button class="btn-secondary sm" onclick="toggleNotif()"><span class="avatar">${d.user.initial}</span><span style="max-width:130px;overflow:hidden;text-overflow:ellipsis">${d.user.email}</span>${icon.chev}</button>
+    </div>
+    <div id="notifPanel" style="display:none;position:absolute;right:26px;margin-top:6px;width:320px;z-index:40" class="card">
+      <div class="label" style="padding:12px 14px 4px">Notifications</div>
+      ${d.notifications.map(n => `<div style="padding:10px 14px;border-top:1px solid #f1f5f9;${n.unread ? "" : "opacity:.55"}"><div style="font-weight:600;font-size:13px">${n.t}</div><div class="muted" style="font-size:12px">${n.b}</div></div>`).join("")}
+    </div>
+    <main class="main">
+      <div class="banner">Mock provider mode: generation uses fixtures and “publishing” goes to a sandbox. Set PROVIDER_MODE=live and platform keys to go live.</div>
+      ${settingsActive ? `<div><h1 class="page-title">Settings</h1><div class="tabs mt4">${SETTINGS_TABS.map(([p, l]) => `<button class="${active === p ? "on" : ""}" onclick="go('${p}')">${l}</button>`).join("")}</div></div>` : ""}
+      ${body}
+    </main>
+  </div></div>`;
+}
+function toggleNotif() { const p = document.getElementById("notifPanel"); if (p) p.style.display = p.style.display === "none" ? "block" : "none"; }
+
+/* ============ app pages ============ */
+pages["a-onboarding"] = () => shell("a-velocity", `
+<div style="max-width:640px;margin:24px auto">
+  <h1 class="page-title" style="font-size:30px">Let's build your Company Profile</h1>
+  <p class="muted mt2">Paste your website URL. We'll read your site, understand your audience and generate your first 30 posts.</p>
+  <div class="card mt6" style="padding:24px">
+    <div class="row"><span style="width:20px;height:20px;border:2px solid var(--brand200);border-top-color:var(--brand600);border-radius:50%;display:inline-block"></span><b>Finding your angles</b></div>
+    <div class="pill-progress mt4"><i style="width:80%"></i></div>
+    <div class="grid mt4" style="gap:8px;font-size:13px">
+      <div class="row"><span style="color:var(--accent500)">${icon.check}</span>Reading northwindapp.com — 14 pages</div>
+      <div class="row"><span style="color:var(--accent500)">${icon.check}</span>Understanding your audience — freelancers and small studios</div>
+      <div class="row muted"><span style="width:16px"></span>Generating 30 candidates…</div>
+    </div>
+  </div>
+  <div class="card mt4" style="padding:20px"><div class="label">Detected profile</div>
+    <div class="grid mt2" style="grid-template-columns:1fr 1fr;font-size:13px;gap:10px">
+      <div><span class="muted">Product</span><br><b>${DATA.profile.product}</b></div>
+      <div><span class="muted">Industry</span><br><b>${DATA.profile.industry}</b></div>
+      <div style="grid-column:span 2"><span class="muted">One-liner</span><br>${DATA.profile.desc}</div>
+      <div style="grid-column:span 2"><span class="muted">Pain points</span><br>${DATA.profile.pains.map(p => `<span class="badge" style="margin:3px 4px 0 0">${p}</span>`).join("")}</div>
+    </div></div>
+  <button class="btn-primary mt4" onclick="go('a-velocity')">Open Velocity mode ${icon.arrow}</button>
+</div>`);
+
+let stackIdx = 0, kept = 7;
+pages["a-velocity"] = () => { const c = DATA.stack[stackIdx % DATA.stack.length], n = DATA.stack[(stackIdx + 1) % DATA.stack.length]; return shell("a-velocity", `
+<div class="row" style="justify-content:space-between;flex-wrap:wrap">
+  <div><h1 class="page-title">Velocity mode</h1><p class="muted" style="font-size:12.5px">→ or K to keep · ← or S to skip · Z undo · E edit · C schedule</p></div>
+  <div class="wrap"><select class="input" style="width:auto"><option>All formats</option><option>AI UGC</option><option>Slideshow</option><option>Hook + demo</option><option>Meme</option><option>Trend remix</option></select>
+    <span class="badge brand" style="padding:8px 14px"><b id="keptN">${kept}</b>&nbsp;kept this session</span><span class="badge" style="padding:8px 14px">28 left · 6 rendering</span></div>
+</div>
+<div class="grid" style="grid-template-columns:360px 1fr;align-items:start">
+  <div style="position:relative;justify-self:center">
+    <div class="phone ${n.grad}" style="position:absolute;inset:0;transform:scale(.95) translateY(12px);opacity:.5"></div>
+    <div class="phone ${c.grad}" style="position:relative">
+      <span class="badge" style="align-self:flex-start;background:rgba(255,255,255,.22);color:#fff">${c.format}</span>
+      <div><div style="font-size:28px;font-weight:800;line-height:1.08">${c.hook}</div><p style="margin-top:10px;font-size:12px;opacity:.7">${c.char ? c.char + " · AI UGC render" : "Rendered preview"} · ${c.dur || "0:15"}</p></div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <button class="circle" style="background:rgba(255,255,255,.16);color:#fff" onclick="appSwipe(0)">✕</button>
+        <button class="circle" style="width:40px;height:40px;background:rgba(255,255,255,.16);color:#fff;font-size:15px" onclick="toast('Undone (prototype)')">↶</button>
+        <button class="circle" style="background:#fff;color:var(--brand700)" onclick="appSwipe(1)">♥</button></div>
+    </div></div>
+  <div class="card" style="padding:24px">
+    <div class="wrap" style="gap:8px"><span class="badge brand">${c.format}</span>${c.char ? `<span class="badge">${c.char}</span>` : ""}<span class="badge green">Score ${c.score}</span><span class="muted" style="font-size:12px">${c.dur || ""}</span></div>
+    <h2 class="mt4" style="font-size:24px">${c.hook}</h2>
+    <div class="mt4"><div class="label">Script</div><p style="font-size:13.5px;color:#334155">${c.script}</p></div>
+    <div class="mt4"><div class="label">Caption</div><p style="font-size:13.5px">${c.caption}</p><p class="mt2" style="font-size:12.5px;color:var(--brand700)">${c.tags.map(t => "#" + t).join(" ")}</p></div>
+    <div class="wrap mt6"><button class="btn-secondary" onclick="toast('Edit modal (prototype)')">Edit (E)</button><button class="btn-secondary" onclick="toast('Scheduled to TikTok + Instagram (prototype)')">Keep &amp; schedule (C)</button></div>
+  </div>
+</div>`); };
+function appSwipe(keep) { if (keep) kept++; stackIdx++; render(); }
+
+pages["a-content"] = () => shell("a-content", `
+<div class="row" style="justify-content:space-between;flex-wrap:wrap"><h1 class="page-title">Content</h1>
+  <div class="wrap"><span class="badge">Saves ${DATA.account.saves}/${DATA.account.savesLimit}</span><button class="btn-primary" onclick="go('a-studio')">${icon.plus} Create / upload</button></div></div>
+<div class="wrap"><input class="input" style="width:240px" placeholder="Search hooks &amp; captions"><select class="input" style="width:auto"><option>All saved</option><option>Saved</option><option>Drafts</option><option>Scheduled</option><option>Published</option></select><select class="input" style="width:auto"><option>All formats</option><option>AI UGC</option><option>Slideshow</option><option>Meme</option></select></div>
+<div class="grid" style="grid-template-columns:repeat(5,1fr)">${DATA.content.map(c => `
+  <div class="card hover" style="overflow:hidden;cursor:pointer" onclick="go('a-content-detail')">
+    <div class="thumb ${c.grad}"><span class="tag">${c.format}</span>${c.hook}</div>
+    <div style="padding:10px 12px"><div class="row" style="justify-content:space-between"><span class="badge">${c.format}</span><span class="badge ${c.status === "published" ? "green" : c.status === "scheduled" ? "blue" : c.status === "draft" ? "" : "brand"}">${c.status}</span></div>
+      <p class="mt2" style="font-size:12px;font-weight:600;line-height:1.3">${c.hook}</p>
+      ${c.views ? `<p class="muted mt2" style="font-size:11px">${fmtN(c.views)} views · ${platIcon[c.platform]}</p>` : ""}</div>
+  </div>`).join("")}</div>`);
+
+pages["a-content-detail"] = () => { const c = DATA.content[0]; return shell("a-content", `
+<div class="grid" style="grid-template-columns:340px 1fr;align-items:start">
+  <div><div class="thumb ${c.grad}" style="font-size:22px"><span class="tag">${c.format}</span>${c.hook}</div>
+    <div class="wrap mt4"><button class="btn-primary sm" onclick="toast('Schedule dialog (prototype)')">Schedule</button><button class="btn-secondary sm" onclick="toast('Timeline editor (prototype)')">Timeline</button><button class="btn-secondary sm" onclick="toast('Edit copy (prototype)')">Edit</button><button class="btn-secondary sm" onclick="toast('Re-rendering… (prototype)')">Re-render</button><button class="btn-secondary sm" onclick="toast('Signed download URL (prototype)')">Download</button><button class="btn-secondary sm" onclick="toast('Generating 5 similar (prototype)')">Generate similar</button></div></div>
+  <div class="grid">
+    <div class="wrap"><span class="badge brand">${c.format}</span><span class="badge green">published</span><span class="badge">${c.char}</span></div>
+    <h1 class="page-title">${c.hook}</h1>
+    <div class="card" style="padding:18px"><div class="label">Script</div><p style="font-size:13.5px;color:#334155">Okay so here's the thing — I run a small studio and for months I just… didn't chase invoices. Then I tried Northwind. It sends the reminder in my tone of voice, three days before the due date and every week after. I got £4,200 back in the first month.</p></div>
+    <div class="card" style="padding:18px"><div class="label">Caption</div><p style="font-size:13.5px">I stopped chasing invoices manually 🧾 Northwind does it for me — link in bio</p><p class="mt2" style="font-size:12.5px;color:var(--brand700)">#founder #freelance #invoicing #smallbusiness #buildinpublic</p></div>
+    <div class="grid" style="grid-template-columns:repeat(4,1fr)">${[["Views", fmtN(c.views)], ["Likes", fmtN(c.likes)], ["Comments", fmtN(c.comments)], ["Shares", "1.4k"]].map(([l, v]) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("")}</div>
+    <div class="card" style="padding:18px"><div class="label">Posts</div>
+      ${[["TikTok", "@northwindapp", "11 Sep, 13:00", "published"], ["Instagram", "@northwind.app", "11 Sep, 18:00", "published"], ["YouTube", "@northwind", "15 Sep, 09:00", "scheduled"]].map(([p, h, t, s]) => `<div class="row mt2" style="justify-content:space-between;font-size:13px"><span>${p} ${h} · ${t}</span><span class="badge ${s === "published" ? "green" : "blue"}">${s}</span></div>`).join("")}</div>
+    <div class="card" style="padding:18px"><div class="label">Versions</div>
+      ${[["v3", "Edited caption CTA", "11 Sep, 08:42"], ["v2", "Shortened hook", "10 Sep, 19:05"], ["v1", "Original generation", "10 Sep, 09:12"]].map(([v, t, d]) => `<div class="row mt2" style="justify-content:space-between;font-size:13px"><span><b>${v}</b> · ${t}</span><span class="muted">${d}</span></div>`).join("")}</div>
+    <div class="card" style="padding:18px"><div class="label">Provenance</div><pre class="mono muted" style="margin:0;white-space:pre-wrap;font-size:11.5px">{
+  "angle_type": "pain_point",
+  "profile_version": 3,
+  "llm": "claude-sonnet-5",
+  "character_id": "maya",
+  "credits_consumed": 280,
+  "prompt_template": "v1"
+}</pre></div>
+  </div></div>`); };
+
+pages["a-studio"] = () => shell("a-studio", `
+<h1 class="page-title">Studio</h1>
+<div class="grid" style="grid-template-columns:1fr 1fr;align-items:start">
+  <div class="card" style="padding:24px">
+    <h2 style="font-size:18px">Generate a targeted batch</h2>
+    <div class="mt4"><div class="label">Formats</div><div class="wrap">${["AI UGC", "Human UGC", "Slideshow", "Hook + demo", "Meme", "Trend remix"].map((f, i) => `<span class="badge ${i === 0 || i === 2 ? "dark" : ""}" style="padding:7px 13px;cursor:pointer">${f}</span>`).join("")}</div></div>
+    <div class="grid mt4" style="grid-template-columns:1fr 1fr"><div><label class="label">Count</label><input class="input" value="10"></div><div><label class="label">Character (AI UGC)</label><select class="input"><option>Auto</option>${DATA.characters.map(c => `<option>${c.name}</option>`).join("")}</select></div></div>
+    <div class="mt4"><label class="label">Language (Pro)</label><input class="input" value="en"></div>
+    <p class="muted mt4" style="font-size:12px">Daily candidate limit: 400. Batches land in Velocity mode for approval.</p>
+    <button class="btn-primary mt4" onclick="toast('Queued 10 candidates (prototype)')">Generate</button>
+  </div>
+  <div class="grid">
+    <div class="card" style="padding:24px"><h2 style="font-size:18px">Upload</h2>
+      <div class="wrap mt2" style="font-size:13px"><label class="row"><input type="radio" checked> Content (video/image to schedule)</label><label class="row"><input type="radio"> Brand asset</label></div>
+      <input class="input mt4" placeholder="Hook / title" value="Client portal walkthrough">
+      <textarea class="input mt2" rows="2" placeholder="Caption">Every invoice, every reminder, one link for the client.</textarea>
+      <div class="card mt4" style="padding:20px;border-style:dashed;text-align:center;color:var(--muted);font-size:13px">Drop a file here or <span style="color:var(--brand700);font-weight:600">browse</span><br><span style="font-size:11.5px">MP4, MOV, PNG, JPG up to 200MB</span></div>
+      <button class="btn-secondary mt4" onclick="toast('Uploaded demo-video.mp4 (prototype)')">Upload</button>
+      <p class="muted mt2" style="font-size:11.5px">Brand screenshots are used as the visual bed in generated slideshows and hook + demo videos.</p></div>
+    <div class="card" style="padding:24px"><div class="row" style="justify-content:space-between"><h2 style="font-size:18px">AI Studio</h2><span class="badge brand">${DATA.account.credits} credits</span></div>
+      <p class="muted mt2" style="font-size:13px">Image and video generation on credits (4 per image, 10 per second of video).</p>
+      <div class="grid mt4" style="grid-template-columns:1fr 1fr"><div><label class="label">Images</label><input class="input" value="2"></div><div><label class="label">Video seconds</label><input class="input" value="15"></div></div>
+      <textarea class="input mt4" rows="2" placeholder="Image prompt">Invoice dashboard on a desk, morning light, phone photo</textarea>
+      <button class="btn-secondary mt2" style="width:100%" onclick="toast('Generated 2 images · 8 credits (prototype)')">${icon.img} Generate 2 images (8 credits)</button>
+      <textarea class="input mt4" rows="2" placeholder="Video script">Hi, this is how Northwind chases an invoice for you.</textarea>
+      <button class="btn-secondary mt2" style="width:100%" onclick="toast('Video queued · 150 credits (prototype)')">${icon.video} Generate 15s video (150 credits)</button>
+      <p class="mt4" style="font-size:13px">Estimated cost: <b>158 credits</b></p></div>
+  </div></div>`);
+
+pages["a-calendar"] = () => {
+  const days = []; const startDow = 1;
+  for (let i = 0; i < 35; i++) { const n = i - startDow + 1; days.push(n >= 1 && n <= 30 ? n : null); }
+  return shell("a-calendar", `
+<div class="row" style="justify-content:space-between;flex-wrap:wrap">
+  <h1 class="page-title">Calendar</h1>
+  <div class="wrap"><button class="btn-ghost">‹</button><b style="min-width:150px;text-align:center">September 2026</b><button class="btn-ghost">›</button>
+    <div class="row" style="border:1px solid var(--line);border-radius:12px;overflow:hidden;gap:0">${["month", "week", "list"].map((v, i) => `<button style="padding:6px 14px;font-size:12.5px;${i === 0 ? "background:var(--brand600);color:#fff" : "background:#fff"}">${v}</button>`).join("")}</div>
+    <button class="btn-secondary sm" onclick="toast('Downloaded velocity.ics (prototype)')">Export .ics</button><button class="btn-secondary sm" onclick="toast('Feed URL copied (prototype)')">Subscribe</button></div>
+</div>
+<div class="cal">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => `<div class="h">${d}</div>`).join("")}
+${days.map(n => `<div class="d">${n ? `<div class="n" ${n === 13 ? 'style="font-weight:800;color:var(--brand600)"' : ""}>${n}</div>${DATA.calendar.filter(e => e.d === n).map(e => `<div class="ev ${e.s}" title="${e.hook}" onclick="toast('${e.hook} — ${e.s} (prototype)')"><b>${e.t}</b> ${e.p} <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.hook}</span></div>`).join("")}` : ""}</div>`).join("")}</div>
+<div class="wrap"><span class="badge green">published</span><span class="badge blue">scheduled</span><span class="badge amber">pending approval</span><span class="badge red">failed / held</span><span class="muted" style="font-size:12px">Drag any post to reschedule · click to approve, retry or cancel</span></div>`);
+};
+
+pages["a-automations"] = () => shell("a-automations", `
+<div class="row" style="justify-content:space-between"><h1 class="page-title">Automations</h1><button class="btn-primary" onclick="toast('New automation wizard (prototype)')">${icon.plus} New automation</button></div>
+<div class="grid">${DATA.automations.map(a => `
+  <div class="card" style="padding:18px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div><div class="wrap" style="align-items:center"><b>${a.name}</b><span class="badge ${a.status === "active" ? "green" : a.status === "paused" ? "amber" : ""}">${a.status}</span><span class="badge">${a.mode}</span><span class="badge">${a.approval}</span></div>
+      <div class="muted mt2" style="font-size:12px">${a.perDay}/day · ${a.horizon} days · ${a.times} · ${a.accounts} accounts · last run ${a.last}</div></div>
+    <div class="wrap"><button class="btn-secondary sm" onclick="toast('Preview: 28 slots, 12 to generate (prototype)')">Preview</button><button class="btn-secondary sm" onclick="toast('Run log (prototype)')">Runs</button><button class="btn-primary sm" onclick="toast('Running now (prototype)')">Run now</button><button class="btn-ghost sm">${a.status === "active" ? "Pause" : "Resume"}</button></div>
+  </div></div>`).join("")}</div>
+<div class="card" style="overflow:hidden"><div style="padding:12px 16px;font-weight:600;border-bottom:1px solid #f1f5f9">Recent runs · Daily TikTok + Reels</div>
+<table class="tbl"><thead><tr><th>Started</th><th>Status</th><th>Generated</th><th>Scheduled</th><th>Skipped</th></tr></thead><tbody>
+${DATA.runs.map(r => `<tr><td>${r.started}</td><td><span class="badge green">${r.status}</span></td><td>${r.gen}</td><td>${r.sch}</td><td>${r.skip}</td></tr>`).join("")}</tbody></table></div>
+<div class="card" style="padding:20px"><div class="label">Preview — quota impact</div>
+  <div class="grid mt2" style="grid-template-columns:repeat(4,1fr)">${[["Slots planned", "28"], ["Will generate", "12"], ["Library available", "16"], ["Saves after run", "53/100"]].map(([l, v]) => `<div><div class="muted" style="font-size:12px">${l}</div><div style="font-size:20px;font-weight:800">${v}</div></div>`).join("")}</div>
+  <p class="mt4" style="font-size:12.5px;color:#b45309">⚠ LinkedIn account needs reconnecting — 4 slots will be skipped.</p></div>`);
+
+pages["a-analytics"] = () => {
+  const hours = [2, 5, 9, 14, 22, 38, 61, 74, 55, 42, 33, 48, 66, 88, 72, 51, 40, 35, 58, 76, 63, 41, 22, 9];
+  return shell("a-analytics", `
+<div class="row" style="justify-content:space-between"><h1 class="page-title">Analytics</h1><div class="wrap"><select class="input" style="width:auto"><option>Last 30 days</option><option>Last 7 days</option><option>Last 90 days</option></select><button class="btn-secondary sm" onclick="toast('Exported analytics.csv (prototype)')">Export CSV</button></div></div>
+<div class="grid" style="grid-template-columns:repeat(5,1fr)">${[["Posts", "96", "+18 vs prev"], ["Views", "238.6k", "+42%"], ["Likes", "15.3k", "+37%"], ["Comments", "752", "+21%"], ["Shares", "2.1k", "+55%"]].map(([l, v, s]) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("")}</div>
+<div class="card" style="padding:18px;background:var(--brand50);border-color:var(--brand100)"><div class="label">Insights</div>
+  <ul style="margin:6px 0 0;padding-left:18px;font-size:13.5px;display:grid;gap:6px"><li>💡 AI UGC averages 2.3× the views of memes this period.</li><li>💡 2 posts broke out at 3× your median — generate similar content to double down.</li><li>💡 Posts published around 13:00 UTC perform best on average.</li><li>💡 TikTok drove 71% of tracked signups; LinkedIn drove the highest purchase value per visit.</li></ul></div>
+<div class="grid" style="grid-template-columns:1fr 1fr">
+  <div class="card" style="padding:18px"><div class="label">Views by platform</div>
+    ${[["TikTok", 148000, 100], ["Instagram", 61000, 41], ["YouTube", 23400, 16], ["LinkedIn", 6200, 4]].map(([p, v, w]) => `<div class="mt4"><div class="row" style="justify-content:space-between;font-size:13px"><span>${p}</span><b>${fmtN(v)}</b></div><div class="pill-progress mt2"><i style="width:${w}%"></i></div></div>`).join("")}</div>
+  <div class="card" style="padding:18px"><div class="label">Avg views by format</div>
+    ${[["AI UGC", "3.1k", 42], ["Trend remix", "2.6k", 36], ["Slideshow", "2.2k", 30], ["Hook + demo", "1.4k", 19], ["Meme", "0.9k", 12]].map(([f, v, w]) => `<div class="row mt2" style="justify-content:space-between;font-size:13px;border-bottom:1px solid #f1f5f9;padding-bottom:6px"><span>${f}</span><b>${v}</b></div>`).join("")}</div>
+  <div class="card" style="padding:18px"><div class="label">Best posting hours (UTC)</div><div class="bar mt4">${hours.map(h => `<i style="height:${h}%"></i>`).join("")}</div><div class="row mt2 muted" style="justify-content:space-between;font-size:11px"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div></div>
+  <div class="card" style="padding:18px"><div class="label">Website attribution</div>
+    <table class="tbl mt2"><thead><tr><th>Source</th><th>Visits</th><th>Signups</th><th>Purchases</th><th>Value</th></tr></thead><tbody>
+    ${[["TikTok", 4820, 311, 42, "$2,058"], ["Instagram", 1940, 118, 15, "$735"], ["YouTube", 760, 44, 7, "$343"], ["LinkedIn", 410, 38, 9, "$441"], ["Direct", 2210, 96, 11, "$539"]].map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join("")}</tbody></table></div>
+</div>
+<div class="card" style="overflow:hidden"><div style="padding:12px 16px;font-weight:600">Top posts</div>
+<table class="tbl"><thead><tr><th>Post</th><th>Platform</th><th>Views</th><th>Likes</th><th>Comments</th><th></th></tr></thead><tbody>
+${DATA.content.filter(c => c.views).map(c => `<tr><td><div class="row"><span class="thumb ${c.grad}" style="width:26px;height:44px;aspect-ratio:auto;border-radius:5px;padding:0"></span><span style="font-weight:600">${c.hook}</span>${c.views > 100000 ? '<span class="badge green">breakout</span>' : ""}</div></td><td>${c.platform}</td><td>${fmtN(c.views)}</td><td>${fmtN(c.likes)}</td><td>${c.comments}</td><td style="text-align:right"><button class="btn-secondary sm" onclick="toast('Generating similar (prototype)')">Generate similar</button></td></tr>`).join("")}</tbody></table></div>`);
+};
+
+pages["a-trends"] = () => shell("a-trends", `
+<div class="row" style="justify-content:space-between;flex-wrap:wrap"><h1 class="page-title">Trends</h1>
+  <div class="wrap"><input class="input" style="width:200px" placeholder="Search hooks"><select class="input" style="width:auto"><option>All platforms</option><option>TikTok</option><option>Instagram</option><option>YouTube</option><option>LinkedIn</option></select><label class="row" style="font-size:13px"><input type="checkbox" checked> For my brand</label></div></div>
+<div class="grid" style="grid-template-columns:repeat(4,1fr)">${DATA.trends.map(t => `
+  <div class="card hover" style="padding:18px;cursor:pointer;display:flex;flex-direction:column" onclick="toast('Remixing “${t.hook}” — 5 candidates coming to Velocity mode (prototype)')">
+    <div class="wrap"><span class="badge">${t.platform}</span><span class="badge green">🔥 ${t.vel}</span></div>
+    <p class="mt2" style="font-weight:700;font-size:14px;line-height:1.3">${t.hook}</p>
+    <p class="muted mt2" style="font-size:11.5px">${t.fmt.replace(/_/g, " ")} · ${t.views} views</p>
+    <div class="wrap mt4" style="margin-top:auto;padding-top:10px">${t.tags.map(x => `<span class="badge">${x}</span>`).join("")}</div>
+  </div>`).join("")}</div>`);
+
+pages["a-characters"] = () => shell("a-characters", `
+<div class="row" style="justify-content:space-between;flex-wrap:wrap"><div><h1 class="page-title">AI UGC characters</h1><p class="muted" style="font-size:12.5px">All characters are synthetic. Videos are flagged as AI-generated when published.</p></div>
+  <div class="wrap"><select class="input" style="width:auto"><option>Any gender</option><option>Female</option><option>Male</option></select><input class="input" style="width:170px" placeholder="Style tag (e.g. saas)"><button class="btn-primary" onclick="toast('Create character — 4 credits (prototype)')">${icon.plus} Create my own</button></div></div>
+<div class="grid" style="grid-template-columns:repeat(6,1fr)">${DATA.characters.map(c => `
+  <div class="card" style="overflow:hidden;${c.tier === "pro" ? "opacity:.7" : ""}">
+    <div style="aspect-ratio:1;background:linear-gradient(160deg,hsl(${c.hue},55%,48%),hsl(${c.hue},55%,28%));position:relative;display:grid;place-items:center">
+      <svg width="70" height="70" viewBox="0 0 24 24" fill="rgba(255,255,255,.85)"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0z"/></svg>
+      <span style="position:absolute;bottom:6px;left:0;right:0;text-align:center;color:#fff;font-size:10px;opacity:.8">${c.name} · synthetic</span></div>
+    <div style="padding:12px"><div class="row" style="justify-content:space-between"><b style="font-size:13px">${c.name}</b>${c.tier === "mine" ? '<span class="badge brand">mine</span>' : c.tier === "pro" ? '<span class="badge amber">pro+</span>' : ""}</div>
+      <div class="muted" style="font-size:11.5px">${c.g} · ${c.age}</div>
+      <div class="wrap mt2">${c.tags.map(t => `<span class="badge">${t}</span>`).join("")}</div>
+      <button class="btn-primary sm mt4" style="width:100%" onclick="toast('Generating 5 videos with ${c.name} (prototype)')">${c.tier === "pro" ? "Upgrade to use" : "Generate 5 videos"}</button>
+      ${c.tier === "mine" ? `<button class="btn-secondary sm mt2" style="width:100%" onclick="toast('Consistency pack added — 12 credits (prototype)')">+ Consistency pack (4 views)</button>` : ""}</div>
+  </div>`).join("")}</div>`);
+
+pages["a-affiliate"] = () => shell("a-affiliate", `
+<h1 class="page-title">Affiliate program</h1>
+<div class="card" style="padding:20px"><div class="label">Your link</div><code style="background:#f1f5f9;padding:6px 10px;border-radius:8px">https://velocity.example/?ref=jabbar</code>
+  <p class="muted mt2" style="font-size:12px">30% lifetime · 60-day cookie · payouts monthly, $50 minimum to pay@northwindapp.com.</p></div>
+<div class="grid" style="grid-template-columns:repeat(5,1fr)">${[["Signups", "38"], ["Paying", "11"], ["Earned", "$1,284.30"], ["Pending", "$118.80"], ["Paid", "$1,047.90"]].map(([l, v]) => `<div class="kpi"><div class="l">${l}</div><div class="v" style="font-size:22px">${v}</div></div>`).join("")}</div>
+<div class="card" style="overflow:hidden"><table class="tbl"><thead><tr><th>Date</th><th>Payment</th><th>Commission</th><th>Status</th></tr></thead><tbody>
+${DATA.commissions.map(c => `<tr><td>${c.date}</td><td>${c.amount}</td><td><b>${c.commission}</b></td><td><span class="badge ${c.status === "paid" ? "green" : c.status === "approved" ? "blue" : "amber"}">${c.status}</span></td></tr>`).join("")}</tbody></table></div>`);
+
+/* ---- settings ---- */
+pages["a-set-profile"] = () => shell("a-set-profile", `
+<div class="grid" style="grid-template-columns:1fr 320px;align-items:start">
+  <div class="card" style="padding:24px">
+    <div class="row" style="justify-content:space-between"><h2 style="font-size:17px">Company profile <span class="muted" style="font-size:11px">v3</span></h2>
+      <div class="wrap"><button class="btn-secondary sm" onclick="toast('Re-analysing northwindapp.com (prototype)')">Re-analyse site</button><button class="btn-primary sm" onclick="toast('Saved as v4 (prototype)')">Save</button></div></div>
+    <div class="grid mt4" style="grid-template-columns:1fr 1fr">
+      <div><label class="label">Product name</label><input class="input" value="${DATA.profile.product}"></div>
+      <div><label class="label">Website URL</label><input class="input" value="${DATA.profile.url}"></div>
+      <div><label class="label">Tagline</label><input class="input" value="${DATA.profile.tagline}"></div>
+      <div><label class="label">Industry</label><input class="input" value="${DATA.profile.industry}"></div>
+      <div><label class="label">Call to action</label><input class="input" value="${DATA.profile.cta}"></div>
+      <div><label class="label">Language</label><input class="input" value="${DATA.profile.lang}"></div>
+      <div><label class="label">Tone adjectives</label><input class="input" value="${DATA.profile.tone}"></div>
+      <div><label class="label">Primary audience</label><input class="input" value="${DATA.profile.audience}"></div>
+      <div><label class="label">Primary colour</label><div class="row"><span style="width:38px;height:38px;border-radius:10px;background:${DATA.profile.primary};border:1px solid var(--line)"></span><input class="input" value="${DATA.profile.primary}"></div></div>
+      <div><label class="label">Secondary colour</label><div class="row"><span style="width:38px;height:38px;border-radius:10px;background:${DATA.profile.secondary};border:1px solid var(--line)"></span><input class="input" value="${DATA.profile.secondary}"></div></div>
+    </div>
+    <div class="mt4"><label class="label">One-line description</label><textarea class="input" rows="2">${DATA.profile.desc}</textarea></div>
+    <div class="mt4"><label class="label">Audience pain points</label><textarea class="input" rows="3">${DATA.profile.pains.join("\n")}</textarea></div>
+    <div class="mt4"><label class="label">Key features</label><textarea class="input" rows="4">${DATA.profile.features.join("\n")}</textarea></div>
+    <div class="mt4"><label class="label">Differentiators</label><textarea class="input" rows="3">${DATA.profile.diffs.join("\n")}</textarea></div>
+    <div class="mt4"><label class="label">Hook ideas</label><textarea class="input" rows="4">${DATA.profile.hooks.join("\n")}</textarea></div>
+  </div>
+  <div class="grid">
+    <div class="card" style="padding:20px"><h2 style="font-size:15px">Workspace</h2>
+      <div class="mt4"><label class="label">Name</label><input class="input" value="${DATA.workspace.name}"></div>
+      <div class="mt4"><label class="label">Timezone (IANA)</label><input class="input" value="${DATA.workspace.tz}"></div>
+      <button class="btn-secondary mt4" onclick="toast('Workspace updated (prototype)')">Update</button></div>
+    <div class="card" style="padding:20px"><h2 style="font-size:15px">New workspace</h2><p class="muted mt2" style="font-size:11.5px">3/3 used on Growth.</p><input class="input mt2" placeholder="Brand name"><button class="btn-primary mt2" onclick="toast('402 — upgrade to Pro for 10 workspaces (prototype)')">Create</button></div>
+    <div class="card" style="padding:20px"><h2 style="font-size:15px">Account</h2><p class="muted mt2" style="font-size:13px">${DATA.user.email}</p><button class="btn-secondary mt2" style="width:100%" onclick="go('m-login')">Sign out</button><button class="btn-ghost mt2" style="width:100%;color:#dc2626" onclick="toast('Account deletion — 30-day purge (prototype)')">Delete account</button></div>
+  </div></div>`);
+
+pages["a-set-socials"] = () => shell("a-set-socials", `
+<div class="banner" style="border-color:#fde68a">Mock mode: “connecting” creates a sandbox account and “publishing” returns example permalinks. Set platform keys for real OAuth.</div>
+<div class="grid" style="grid-template-columns:1fr 1fr">${DATA.socials.map(s => `
+  <div class="card" style="padding:20px"><div class="row" style="justify-content:space-between"><h2 style="font-size:16px">${s.platform}</h2><button class="btn-secondary sm" onclick="toast('OAuth flow for ${s.platform} (prototype)')">+ Connect</button></div>
+    <div class="row mt4" style="gap:12px"><span class="avatar" style="width:34px;height:34px;border-radius:50%">${s.platform[0]}</span>
+      <div style="flex:1"><div style="font-weight:600;font-size:13px">@${s.handle}</div><div class="muted" style="font-size:11.5px">${s.followers} followers · ${s.slots} posting slots</div></div>
+      <span class="badge ${s.status === "active" ? "green" : "amber"}">${s.status}</span>
+      ${s.status !== "active" ? `<button class="btn-primary sm" onclick="toast('Reconnect ${s.platform} (prototype)')">Reconnect</button>` : ""}
+      <button class="btn-ghost sm" onclick="toast('Posting slots editor (prototype)')">Slots</button></div>
+  </div>`).join("")}</div>
+<div class="card" style="padding:20px"><div class="label">Posting slots · TikTok</div>
+  <p class="muted" style="font-size:12.5px">Queue scheduling picks the next free slot. One per line: weekday HH:MM (0 = Sunday).</p>
+  <textarea class="input mt2" rows="5">1 09:00
+1 18:00
+3 09:00
+5 13:00
+6 11:00</textarea><button class="btn-primary mt2" onclick="toast('Slots saved (prototype)')">Save</button></div>`);
+
+pages["a-set-billing"] = () => shell("a-set-billing", `
+<div class="card" style="padding:20px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:12px">
+  <div><div class="label">Current plan</div><div style="font-size:20px;font-weight:800">${DATA.account.plan} <span class="badge">${DATA.account.interval}</span></div><div class="muted" style="font-size:11.5px">Renews ${DATA.account.renews}</div></div>
+  <button class="btn-secondary" onclick="toast('Stripe billing portal (prototype)')">Manage subscription / invoices</button></div></div>
+<div class="card" style="padding:20px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:12px">
+  <div><div class="label">AI Studio credits</div><div style="font-size:20px;font-weight:800">${DATA.account.credits}</div><div class="muted" style="font-size:11.5px">500 allocated monthly on Growth; no rollover.</div></div>
+  <div class="wrap">${[["100 credits", "$10"], ["500 credits", "$40"], ["2000 credits", "$140"]].map(([c, p]) => `<button class="btn-secondary sm" onclick="toast('Stripe checkout for ${c} (prototype)')">${c} · ${p}</button>`).join("")}</div></div>
+  <div class="mt4"><div class="label">Ledger</div><table class="tbl"><tbody>
+  ${[["13 Sep, 13:40", "video", "-150"], ["13 Sep, 11:02", "image", "-8"], ["1 Sep, 00:01", "allocation", "+500"], ["1 Sep, 00:01", "expiry", "-96"], ["24 Aug, 16:20", "purchase", "+100"]].map(([d, r, v]) => `<tr><td>${d}</td><td style="text-transform:capitalize">${r}</td><td style="text-align:right;font-weight:600;color:${v.startsWith("+") ? "#15803d" : "#b91c1c"}">${v}</td></tr>`).join("")}</tbody></table></div></div>
+<h2 style="font-size:17px">Change plan</h2>${priceGrid("growth")}
+<p class="muted" style="font-size:11.5px">Downgrading keeps your content; workspaces beyond the new limit are locked (not deleted) and saves above the limit remain read-only until you're under the cap.</p>`);
+
+pages["a-set-members"] = () => shell("a-set-members", `
+<div class="card" style="padding:20px;max-width:720px"><h2 style="font-size:16px">Invite a teammate</h2>
+  <div class="wrap mt4"><input class="input" style="flex:1" value="design@northwindapp.com"><select class="input" style="width:auto"><option>Editor</option><option>Admin</option><option>Viewer</option></select><button class="btn-primary" onclick="toast('Invite sent (prototype)')">Invite</button></div>
+  <p class="muted mt2" style="font-size:11.5px">Admin: manage everything · Editor: create, approve, schedule · Viewer: read-only.</p></div>
+<div class="card" style="overflow:hidden;max-width:720px"><table class="tbl"><thead><tr><th>Member</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>
+${[["Jabbar Ahmed", "jabbar@northwindapp.com", "Admin", "active"], ["Priya Raman", "priya@northwindapp.com", "Editor", "active"], ["Sam Okafor", "sam@northwindapp.com", "Editor", "active"], ["design@northwindapp.com", "", "Editor", "invited"]].map(([n, e, r, s]) => `<tr><td><b>${n}</b>${e ? `<br><span class="muted" style="font-size:11.5px">${e}</span>` : ""}</td><td>${r}</td><td><span class="badge ${s === "active" ? "green" : "amber"}">${s}</span></td><td style="text-align:right"><button class="btn-ghost sm" style="color:#dc2626" onclick="toast('Removed (prototype)')">Remove</button></td></tr>`).join("")}</tbody></table></div>`);
+
+pages["a-set-api"] = () => shell("a-set-api", `
+<div class="card" style="padding:20px"><h2 style="font-size:16px">Create API key</h2>
+  <div class="wrap mt4" style="align-items:center"><input class="input" style="width:180px" value="Zapier"><div class="wrap">${["content:read", "content:write", "publish", "analytics:read", "trends:read"].map((s, i) => `<label class="row" style="font-size:12px"><input type="checkbox" ${i < 3 ? "checked" : ""}> ${s}</label>`).join("")}</div><button class="btn-primary" onclick="toast('Key created — shown once (prototype)')">Create</button></div>
+  <pre class="mt4" style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:12px;font-size:12px;margin:0">sk_live_24fA9Kd82mQpLz61XvTn0RsB<div style="color:#fbbf24;margin-top:6px">Copy this now — it won't be shown again.</div></pre></div>
+<div class="card" style="overflow:hidden"><table class="tbl"><thead><tr><th>Name</th><th>Prefix</th><th>Scopes</th><th>Last used</th><th></th></tr></thead><tbody>
+${DATA.keysAdmin.filter(k => k.owner === DATA.user.email).map(k => `<tr><td><b>${k.name}</b></td><td class="mono">${k.prefix}…</td><td><div class="wrap">${k.scopes.map(s => `<span class="badge">${s}</span>`).join("")}</div></td><td class="muted">${k.last}</td><td style="text-align:right"><button class="btn-ghost sm" style="color:#dc2626" onclick="toast('Key revoked (prototype)')">Revoke</button></td></tr>`).join("")}</tbody></table>
+<div class="muted" style="padding:10px 16px;font-size:11.5px;border-top:1px solid #f1f5f9">Rate limit on Growth: 300 requests/minute.</div></div>
+<div class="card" style="padding:20px"><h2 style="font-size:16px">Webhooks</h2>
+  <p class="muted mt2" style="font-size:13px">Receive signed POSTs when batches complete, content is saved, posts are scheduled, published or fail, and automations run.</p>
+  <div class="wrap mt4" style="align-items:center"><input class="input" style="width:300px" value="https://northwindapp.com/api/hooks/velocity"><div class="wrap">${["*", "batch.completed", "content.saved", "post.scheduled", "post.published", "post.failed", "automation.ran"].map((e, i) => `<label class="row" style="font-size:11.5px"><input type="checkbox" ${i === 0 ? "checked" : ""}> ${e}</label>`).join("")}</div><button class="btn-primary" onclick="toast('Webhook added — secret shown once (prototype)')">Add</button></div>
+  ${DATA.webhooksAdmin.filter(w => w.owner === DATA.user.email).map(w => `<div class="row mt4" style="border-top:1px solid #f1f5f9;padding-top:12px"><code>${w.url}</code><span class="muted" style="font-size:12px">${w.events}</span><button class="btn-ghost sm" style="margin-left:auto;color:#dc2626" onclick="toast('Removed (prototype)')">Remove</button></div>`).join("")}</div>
+<div class="card" style="padding:20px"><h2 style="font-size:16px">Usage</h2>
+  <pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:12px;font-size:12px;margin:12px 0 0;overflow-x:auto">curl https://app.velocity.example/api/v1/me -H "Authorization: Bearer sk_live_..."</pre>
+  <p class="muted mt2" style="font-size:12.5px">MCP endpoint: <code>https://app.velocity.example/api/mcp</code> · OpenAPI: <code>/api/v1/openapi</code></p></div>`);
+
+pages["a-set-tracking"] = () => shell("a-set-tracking", `
+<div class="card" style="padding:20px"><h2 style="font-size:16px">Website tracking</h2>
+  <p class="muted mt2" style="font-size:13px">Install a lightweight snippet to attribute visits, signups and purchases to the posts that drove them. Each scheduled post gets a tracked link automatically.</p>
+  <div class="row mt4"><b>northwindapp.com</b><span class="badge green">receiving events</span></div>
+  <pre class="mt2" style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:12px;font-size:12px;margin:8px 0 0;overflow-x:auto">&lt;script async src="https://app.velocity.example/t.js" data-site="vt_8fk21dQ"&gt;&lt;/script&gt;</pre>
+  <p class="muted mt2" style="font-size:11.5px">Track conversions: <code>velocity.track('signup')</code> · <code>velocity.track('purchase', { value: 49, currency: 'USD' })</code></p></div>
+<div class="card" style="overflow:hidden"><div style="padding:12px 16px;font-weight:600">Tracked links</div>
+<table class="tbl"><thead><tr><th>Link</th><th>Post</th><th>Clicks</th><th>Visits</th><th>Signups</th><th>Purchases</th></tr></thead><tbody>
+${[["/r/qKcyo8", "I stopped chasing invoices", 1840, 1622, 96, 14], ["/r/PMrsLA", "3 things I wish I knew", 912, 804, 41, 6], ["/r/ZkMPBe", "How I forecast cash flow", 402, 361, 19, 3], ["/r/kvKYqN", "Unpopular opinion", 188, 164, 22, 5], ["/r/NL3Ohz", "POV: the client finally paid", 64, 58, 4, 0]].map(r => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td></tr>`).join("")}</tbody></table></div>`);
+</script>
+<script>
+/* ============ admin ============ */
+const ADMIN_TABS = [["ad-overview", "Overview", icon.gauge], ["ad-accounts", "Accounts", icon.users], ["ad-keys", "Keys & webhooks", icon.key], ["ad-integrations", "Integrations", icon.plug], ["ad-moderation", "Moderation", icon.alert], ["ad-publishing", "Publishing", icon.send], ["ad-affiliates", "Affiliates", icon.sparkle], ["ad-costs", "Costs", icon.gauge], ["ad-curation", "Curation", icon.library], ["ad-audit", "Audit log", icon.scroll]];
+const admin = (active, body) => shell(active, `
+<div><h1 class="page-title">Admin panel</h1><p class="muted mt2" style="font-size:13px">Manage every account, key, integration and platform library.</p></div>
+<div class="tabs">${ADMIN_TABS.map(([p, l, ic]) => `<button class="${active === p ? "on" : ""}" onclick="go('${p}')">${ic}${l}</button>`).join("")}</div>
+${body}`);
+
+pages["ad-overview"] = () => admin("ad-overview", `
+<div class="grid" style="grid-template-columns:repeat(4,1fr)">${[["Users", "1,284", "+63 this month"], ["Paying accounts", "412", "872 free"], ["Content items", "38,190", "612 today"], ["Posts published", "24,806", "38 failed"]].map(([l, v, s]) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("")}</div>
+<div class="grid" style="grid-template-columns:1fr 1fr">
+  <div class="card" style="padding:20px"><div class="label">Plan distribution</div>
+    ${[["free", 872, 68], ["starter", 186, 15], ["growth", 171, 13], ["pro", 55, 4]].map(([p, n, w]) => `<div class="mt4"><div class="row" style="justify-content:space-between;font-size:13px;text-transform:capitalize"><span>${p}</span><b>${n}</b></div><div class="pill-progress mt2"><i style="width:${w * 1.4}%"></i></div></div>`).join("")}</div>
+  <div class="card" style="padding:20px"><div class="label">Platform</div>
+    <div class="grid mt2" style="gap:10px;font-size:13px">
+      <div class="row" style="justify-content:space-between"><span>Provider mode</span><span class="badge amber">mock</span></div>
+      <div class="row" style="justify-content:space-between"><span>Credits consumed (30d)</span><b>1,950,400</b></div>
+      <div class="row" style="justify-content:space-between"><span>Scheduled posts</span><b>26,411</b></div>
+      <div class="row" style="justify-content:space-between"><span>MRR (estimated)</span><b>$21,388</b></div>
+      <div class="row" style="justify-content:space-between"><span>Worker queue depth</span><b>14 render · 2 core</b></div>
+    </div></div>
+</div>
+<div class="card" style="overflow:hidden"><div style="padding:12px 16px;font-weight:600">Recent signups</div>
+<table class="tbl"><thead><tr><th>Account</th><th>Plan</th><th>Joined</th><th>Workspaces</th><th>Published</th></tr></thead><tbody>
+${DATA.accountsAdmin.slice(0, 5).map(a => `<tr><td>${a.email}</td><td><span class="badge ${a.plan === "free" ? "" : "brand"}">${a.plan}</span></td><td class="muted">${a.since}</td><td>${a.ws}</td><td>${a.published}</td></tr>`).join("")}</tbody></table></div>`);
+
+pages["ad-accounts"] = () => admin("ad-accounts", `
+<div class="row"><div style="position:relative;flex:1;max-width:380px"><span style="position:absolute;left:12px;top:11px;color:#94a3b8">${icon.search}</span><input class="input" style="padding-left:36px" placeholder="Search by email, name or account id"></div>
+  <button class="btn-secondary">Search</button><span class="muted" style="margin-left:auto;font-size:12px">${DATA.accountsAdmin.length} accounts</span></div>
+<div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>Account</th><th>Plan</th><th>Workspaces</th><th>Saves</th><th>Credits</th><th>Socials</th><th>Published</th><th>Keys</th><th>Status</th><th></th></tr></thead><tbody>
+${DATA.accountsAdmin.map((a, i) => `<tr>
+  <td><button style="text-align:left" onclick="openAccount(${i})"><div style="font-weight:700;color:var(--brand700)">${a.email}</div><div class="muted" style="font-size:11px">${a.since}${a.stripe !== "—" ? " · " + a.stripe : ""}</div></button></td>
+  <td><span class="badge ${a.plan === "free" ? "" : "brand"}">${a.plan}</span></td><td>${a.ws}</td><td>${a.saves}</td><td>${a.credits}</td><td>${a.socials}</td><td>${a.published}</td><td>${a.keys}</td>
+  <td><span class="badge ${a.status === "active" ? "green" : a.status === "dunning" ? "amber" : "red"}">${a.status}</span></td>
+  <td style="text-align:right"><button class="btn-ghost sm" onclick="openAccount(${i})">Manage</button></td></tr>`).join("")}</tbody></table></div>
+<div id="acctModal"></div>`);
+
+function openAccount(i) {
+  const a = DATA.accountsAdmin[i];
+  document.getElementById("acctModal").innerHTML = `
+  <div style="position:fixed;inset:0;background:rgba(15,23,42,.45);display:grid;place-items:center;z-index:60;padding:20px" onclick="closeAccount(event)">
+    <div class="card" style="max-width:660px;width:100%;padding:26px" onclick="event.stopPropagation()">
+      <div class="row" style="justify-content:space-between"><h2 style="font-size:18px">Manage account</h2><button class="btn-ghost" onclick="closeAccount()">✕</button></div>
+      <div class="row mt4"><span class="avatar" style="width:40px;height:40px;border-radius:12px;font-size:15px">${a.email[0].toUpperCase()}</span>
+        <div><div style="font-weight:700">${a.email}</div><div class="muted" style="font-size:11.5px">Account · ${a.stripe}</div></div>
+        <span class="badge ${a.status === "active" ? "green" : a.status === "dunning" ? "amber" : "red"}" style="margin-left:auto">${a.status}</span></div>
+      <div class="grid mt4" style="grid-template-columns:repeat(3,1fr)">${[["Workspaces", a.ws], ["Saves", a.saves], ["Credits", a.credits], ["Socials", a.socials], ["Published", a.published], ["API keys", a.keys]].map(([l, v]) => `<div style="background:#f8fafc;border-radius:12px;padding:12px"><div class="muted" style="font-size:11.5px">${l}</div><div style="font-size:19px;font-weight:800">${v}</div></div>`).join("")}</div>
+      <div class="grid mt4" style="grid-template-columns:1fr 1fr">
+        <div><label class="label">Plan</label><select class="input" onchange="toast('Plan set (prototype)')">${["free", "starter", "growth", "pro"].map(p => `<option ${p === a.plan ? "selected" : ""}>${p}</option>`).join("")}</select></div>
+        <div><label class="label">Grant credits</label><div class="row"><input class="input" placeholder="100"><button class="btn-secondary" onclick="toast('Credits granted (prototype)')">Grant</button></div></div></div>
+      <div class="wrap mt6" style="border-top:1px solid #f1f5f9;padding-top:16px">
+        <button class="btn-secondary sm" onclick="toast('Usage counters reset (prototype)')">${icon.rotate} Reset usage counters</button>
+        <button class="btn-secondary sm" onclick="toast('All API keys revoked (prototype)')">${icon.trash} Revoke all API keys</button>
+        ${a.status === "suspended" ? `<button class="btn-primary sm" onclick="toast('Account restored (prototype)')">Restore account</button>` : `<button class="btn-danger sm" onclick="toast('Account suspended (prototype)')">${icon.ban} Suspend account</button>`}</div>
+      <p class="muted mt4" style="font-size:11.5px">Stripe customer: ${a.stripe} · Renews 14 Oct 2026</p>
+    </div></div>`;
+}
+function closeAccount(e) { if (e && e.target !== e.currentTarget) return; document.getElementById("acctModal").innerHTML = ""; }
+
+pages["ad-keys"] = () => admin("ad-keys", `
+<div class="grid" style="grid-template-columns:repeat(4,1fr)">${[["Active API keys", DATA.keysAdmin.filter(k => k.status === "active").length], ["Revoked", DATA.keysAdmin.filter(k => k.status === "revoked").length], ["Webhooks", DATA.webhooksAdmin.length], ["Connected socials", 41]].map(([l, v]) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("")}</div>
+<div class="card" style="overflow:hidden"><div style="padding:12px 16px;font-weight:600;border-bottom:1px solid #f1f5f9">API keys (all accounts)</div>
+<div style="overflow:auto"><table class="tbl"><thead><tr><th>Owner</th><th>Name</th><th>Prefix</th><th>Scopes</th><th>Rate limit</th><th>Last used</th><th>Status</th><th></th></tr></thead><tbody>
+${DATA.keysAdmin.map(k => `<tr><td style="font-weight:600">${k.owner}</td><td>${k.name}</td><td class="mono">${k.prefix}…</td><td style="max-width:230px"><div class="wrap">${k.scopes.map(s => `<span class="badge">${s}</span>`).join("")}</div></td><td class="muted">${k.rpm}/min</td><td class="muted" style="font-size:11.5px">${k.last}</td><td><span class="badge ${k.status === "active" ? "green" : "red"}">${k.status}</span></td><td style="text-align:right">${k.status === "active" ? `<button class="btn-ghost sm" style="color:#dc2626" onclick="toast('Key revoked (prototype)')">Revoke</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>
+<div class="card" style="overflow:hidden"><div style="padding:12px 16px;font-weight:600;border-bottom:1px solid #f1f5f9">Webhook endpoints</div>
+<table class="tbl"><thead><tr><th>Owner</th><th>URL</th><th>Events</th><th>Status</th><th></th></tr></thead><tbody>
+${DATA.webhooksAdmin.map(w => `<tr><td style="font-weight:600">${w.owner}</td><td class="mono">${w.url}</td><td class="muted">${w.events}</td><td><span class="badge ${w.enabled ? "green" : ""}">${w.enabled ? "enabled" : "disabled"}</span></td><td style="text-align:right"><button class="btn-ghost sm" onclick="toast('Toggled (prototype)')">${w.enabled ? "Disable" : "Enable"}</button></td></tr>`).join("")}</tbody></table></div>
+<div class="card" style="padding:20px"><div class="label">Connected social accounts by platform</div>
+  <div class="wrap mt2">${[["tiktok", 18, "active"], ["instagram", 12, "active"], ["youtube", 7, "active"], ["linkedin", 3, "active"], ["linkedin", 1, "reconnect needed"]].map(([p, n, s]) => `<span class="badge ${s === "active" ? "green" : "amber"}">${p}: ${n} ${s}</span>`).join("")}</div></div>`);
+
+pages["ad-integrations"] = () => admin("ad-integrations", `
+<div class="banner">Provider mode: <b>mock</b>. All providers are simulated. Set PROVIDER_MODE=live once keys are in place — anything unset keeps using its mock, so you can go live one provider at a time.</div>
+<div class="grid" style="grid-template-columns:repeat(3,1fr)">${DATA.integrations.map(i => `
+  <div class="card hover" style="padding:18px"><div class="row" style="justify-content:space-between;align-items:flex-start"><div style="font-weight:600;font-size:13.5px">${i.name}</div><span class="badge ${i.ok ? "green" : "amber"}">${i.ok ? "configured" : "not set"}</span></div>
+    <div class="wrap mt2">${i.envs.map(e => `<code style="background:#f1f5f9;border-radius:5px;padding:2px 6px;font-size:11px;color:#475569">${e}</code>`).join("")}</div>
+    <a class="mt4" style="display:inline-block;font-size:12px;color:var(--brand700);text-decoration:underline" href="#" onclick="toast('Provider console (prototype)');return false">Provider console ↗</a></div>`).join("")}</div>
+<p class="muted" style="font-size:12px">Credentials are read from the environment and never stored in the database. Restart the app and worker after changing them.</p>`);
+
+pages["ad-moderation"] = () => admin("ad-moderation", `
+<div class="card" style="overflow:hidden"><table class="tbl"><thead><tr><th>Hook</th><th>Reasons</th><th>Workspace</th><th></th></tr></thead><tbody>
+${DATA.moderation.map(m => `<tr><td style="font-weight:600">${m.hook}</td><td><span class="badge red">${m.reasons}</span></td><td class="muted">tom@kettlepress.co</td><td style="text-align:right"><button class="btn-secondary sm" onclick="toast('Unblocked and returned to the stack (prototype)')">Unblock</button></td></tr>`).join("")}</tbody></table></div>
+<p class="muted" style="font-size:12.5px">Blocked content never renders or publishes. Items stay archived until an admin unblocks them.</p>`);
+
+pages["ad-publishing"] = () => admin("ad-publishing", `
+<div class="wrap">${[["published", 24806, "green"], ["scheduled", 1512, "blue"], ["pending approval", 64, "amber"], ["failed", 38, "red"], ["held", 11, "red"]].map(([s, n, c]) => `<span class="badge ${c}" style="padding:8px 14px">${s}: ${n}</span>`).join("")}</div>
+<div class="card" style="overflow:hidden"><div style="padding:12px 16px;font-weight:600;border-bottom:1px solid #f1f5f9">Failed and held posts</div>
+<table class="tbl"><thead><tr><th>Platform</th><th>Status</th><th>Error</th><th>Scheduled</th></tr></thead><tbody>
+${DATA.failedPosts.map(f => `<tr><td style="font-weight:600">${f.platform}</td><td><span class="badge ${f.status === "failed" ? "red" : "amber"}">${f.status}</span></td><td style="font-size:12px;color:#b91c1c">${f.err}</td><td class="muted">${f.when}</td></tr>`).join("")}</tbody></table></div>
+<div class="card" style="padding:20px"><div class="label">Publish success rate, last 7 days</div><div class="bar mt4">${[97, 99, 94, 100, 98, 96, 99].map(h => `<i style="height:${h}%"></i>`).join("")}</div>
+  <div class="row mt2 muted" style="justify-content:space-between;font-size:11px"><span>7 Sep</span><span>13 Sep</span></div></div>`);
+
+pages["ad-affiliates"] = () => admin("ad-affiliates", `
+<div class="card" style="padding:20px"><div class="label">Payable now (approved, unpaid)</div>
+  ${[["jabbar", "pay@northwindapp.com", 4470], ["sara", "sara@copperleaf.studio", 870], ["lumen", "billing@lumenlabs.ai", 12240]].map(([c, e, cents]) => `
+    <div class="row mt2" style="border-top:1px solid #f1f5f9;padding-top:10px;font-size:13px"><b>${c}</b><span class="muted">${e}</span>
+      <span style="margin-left:auto;font-weight:700">$${(cents / 100).toFixed(2)}</span>
+      <button class="btn-primary sm" ${cents < 5000 ? 'disabled style="opacity:.5"' : ""} onclick="toast('Marked paid (prototype)')">${cents < 5000 ? "Below $50 min" : "Mark paid"}</button></div>`).join("")}</div>
+<div class="card" style="overflow:hidden"><table class="tbl"><thead><tr><th>Date</th><th>Affiliate</th><th>Payment</th><th>Commission</th><th>Status</th></tr></thead><tbody>
+${DATA.commissions.map(c => `<tr><td>${c.date}</td><td style="font-weight:600">${c.code}</td><td>${c.amount}</td><td>${c.commission}</td><td><span class="badge ${c.status === "paid" ? "green" : c.status === "approved" ? "blue" : "amber"}">${c.status}</span></td></tr>`).join("")}</tbody></table></div>`);
+
+pages["ad-costs"] = () => admin("ad-costs", `
+<div class="row" style="gap:16px;flex-wrap:wrap">
+  <div class="kpi"><div class="l">Estimated provider + compute cost, last 30 days</div><div class="v" style="font-size:32px">$142.86</div><div class="s">Unit costs configurable in the admin route</div></div>
+  <div class="kpi"><div class="l">Cost per paying account</div><div class="v" style="font-size:32px">$0.35</div><div class="s">against $51.91 ARPA</div></div>
+  <div class="kpi"><div class="l">Gross margin (estimated)</div><div class="v" style="font-size:32px">99.3%</div><div class="s">excludes staff and platform fees</div></div></div>
+<div class="card" style="overflow:hidden"><table class="tbl"><thead><tr><th>Day</th><th>Items</th><th>AI UGC</th><th>Credits</th><th>LLM calls</th><th>Published</th><th>Est. $</th></tr></thead><tbody>
+${DATA.costs.map(c => `<tr><td>${c.day}</td><td>${c.items}</td><td>${c.ugc}</td><td>${c.credits}</td><td>${c.llm}</td><td>${c.pub}</td><td style="font-weight:700">${c.usd.toFixed(2)}</td></tr>`).join("")}</tbody></table></div>`);
+
+pages["ad-curation"] = () => admin("ad-curation", `
+<div class="grid" style="grid-template-columns:1fr 1fr;align-items:start">
+  <div class="card" style="padding:20px"><h2 style="font-size:16px">Import trends (JSON array)</h2>
+    <p class="muted mt2" style="font-size:11.5px">Metadata and recipe only — never third-party media. Upserts on (platform, external_post_id).</p>
+    <textarea class="input mt2 mono" rows="12">[
+  {
+    "platform": "tiktok",
+    "external_post_id": "7398211",
+    "post_url": "https://tiktok.com/@creator/video/7398211",
+    "niche_tags": ["saas", "founder"],
+    "format_type": "pov_text",
+    "hook_text": "POV: you finally automated the thing you hated",
+    "recipe": { "structure": [{ "segment": "hook", "seconds": 3 }], "style": "text over b-roll" },
+    "metrics": { "views": 2400000, "likes": 184000 }
+  }
+]</textarea>
+    <button class="btn-primary mt2" onclick="toast('Imported 1 trend (prototype)')">Import</button></div>
+  <div class="card" style="padding:20px"><h2 style="font-size:16px">Register human UGC clip</h2>
+    <p class="muted mt2" style="font-size:11.5px">Upload the clip in Studio first, then paste its storage key.</p>
+    <input class="input mt2" value="ws/8f2a…/assets/creator-kitchen-01.mp4">
+    <input class="input mt2" value="Hannah W.">
+    <input class="input mt2" value="kitchen, lifestyle, freelance">
+    <div class="grid mt2" style="grid-template-columns:1fr 1fr 1fr"><input class="input" value="24000"><select class="input"><option>Audio replace</option><option>Subtitle only</option></select><select class="input"><option>growth</option><option>starter</option><option>pro</option></select></div>
+    <button class="btn-primary mt2" onclick="toast('Clip registered with licence terms (prototype)')">Register</button>
+    <div class="mt6"><div class="label">Recently registered</div>
+      ${[["Hannah W.", "kitchen", "24s", "audio replace"], ["Dan P.", "desk setup", "18s", "subtitle only"], ["Aisha K.", "car vlog", "31s", "audio replace"]].map(([n, s, d, l]) => `<div class="row mt2" style="font-size:12.5px;border-top:1px solid #f1f5f9;padding-top:8px"><b>${n}</b><span class="muted">${s} · ${d}</span><span class="badge" style="margin-left:auto">${l}</span></div>`).join("")}</div></div>
+</div>`);
+
+pages["ad-audit"] = () => admin("ad-audit", `
+<div class="card" style="overflow:hidden"><table class="tbl"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead><tbody>
+${DATA.audit.map(a => `<tr><td class="muted" style="white-space:nowrap">${a.when}</td><td>${a.actor}</td><td class="mono">${a.action}</td><td class="muted mono" style="font-size:11px">${esc(a.meta)}</td></tr>`).join("")}</tbody></table></div>
+<p class="muted" style="font-size:12px">Audit entries are retained for 24 months and cover every sensitive action across all accounts.</p>`);
+
+/* ============ router ============ */
+const AREAS = {
+  marketing: { label: "Marketing site", pages: [["m-home", "Landing"], ["m-pricing", "Pricing"], ["m-faq", "FAQ"], ["m-blog", "Blog"], ["m-post", "Blog post"], ["m-tool", "Tool page (SEO)"], ["m-compare", "Comparison (SEO)"], ["m-industry", "Industry (SEO)"], ["m-dev", "API & MCP docs"], ["m-aff", "Affiliate program"], ["m-contact", "Contact + map"], ["m-privacy", "Privacy policy"], ["m-404", "404 page"], ["m-login", "Login"]] },
+  app: { label: "Product app", pages: [["a-onboarding", "Onboarding"], ["a-velocity", "Velocity mode"], ["a-content", "Content library"], ["a-content-detail", "Content detail"], ["a-studio", "Studio"], ["a-calendar", "Calendar"], ["a-automations", "Automations"], ["a-analytics", "Analytics"], ["a-trends", "Trends"], ["a-characters", "Characters"], ["a-affiliate", "Affiliate"], ["a-set-profile", "Settings · Profile"], ["a-set-socials", "Settings · Socials"], ["a-set-billing", "Settings · Billing"], ["a-set-members", "Settings · Team"], ["a-set-api", "Settings · API"], ["a-set-tracking", "Settings · Tracking"]] },
+  admin: { label: "Admin panel", pages: ADMIN_TABS.map(([p, l]) => [p, l]) },
+};
+const areaOf = (p) => p.startsWith("m-") ? "marketing" : p.startsWith("ad-") ? "admin" : "app";
+let current = "m-home";
+
+function go(p) { if (!pages[p]) { p = "m-404"; } current = p; location.hash = p; render(); window.scrollTo(0, 0); }
+function render() {
+  const area = areaOf(current);
+  document.getElementById("areaSeg").innerHTML = Object.entries(AREAS).map(([k, v]) => `<button class="${area === k ? "on" : ""}" onclick="go('${v.pages[0][0]}')">${v.label}</button>`).join("");
+  document.getElementById("pagebar").innerHTML = AREAS[area].pages.map(([p, l]) => `<button class="${current === p ? "on" : ""}" onclick="go('${p}')">${l}</button>`).join("");
+  document.getElementById("view").innerHTML = pages[current]();
+}
+function toast(msg) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.style.cssText = "position:fixed;bottom:22px;right:22px;z-index:200;display:grid;gap:8px"; document.body.appendChild(t); }
+  const el = document.createElement("div");
+  el.style.cssText = "background:#0f172a;color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)";
+  el.textContent = msg; t.appendChild(el); setTimeout(() => el.remove(), 2600);
+}
+window.addEventListener("hashchange", () => { const p = location.hash.slice(1); if (p && pages[p] && p !== current) { current = p; render(); } });
+document.addEventListener("keydown", (e) => {
+  if (current !== "a-velocity") return;
+  if (e.key === "ArrowRight" || e.key === "k") appSwipe(1);
+  if (e.key === "ArrowLeft" || e.key === "s") appSwipe(0);
+});
+current = (location.hash.slice(1) && pages[location.hash.slice(1)]) ? location.hash.slice(1) : "m-home";
+render();
+</script>
+</body>
+</html>
