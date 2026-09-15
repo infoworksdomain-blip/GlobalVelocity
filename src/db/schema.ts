@@ -117,16 +117,33 @@ export const characters = pgTable("characters", {
   status: text("status").$type<"draft" | "published" | "retired">().notNull().default("published"),
   createdAt: now(),
 });
+export const ugcClipBatches = pgTable("ugc_clip_batches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdBy: uuid("created_by").references(() => users.id),
+  requestedCount: integer("requested_count").default(0).notNull(),
+  completedCount: integer("completed_count").default(0).notNull(),
+  failedCount: integer("failed_count").default(0).notNull(),
+  status: text("status").$type<"queued" | "running" | "done">().notNull().default("queued"),
+  createdAt: now(), completedAt: ts("completed_at"),
+});
 export const ugcClips = pgTable("ugc_clips", {
   id: uuid("id").primaryKey().defaultRandom(),
   creatorName: text("creator_name"), gender: text("gender"), styleTags: text("style_tags").array().default([]).notNull(),
+  category: text("category"),
   setting: text("setting"), durationMs: integer("duration_ms").notNull(), hasSpeech: boolean("has_speech").default(false).notNull(), transcript: text("transcript"),
   licenceType: text("licence_type").$type<"audio_replace" | "subtitle_only">().notNull(),
   territories: text("territories").array().default(["worldwide"]).notNull(), licenceExpiresAt: ts("licence_expires_at"),
   storageKey: text("storage_key").notNull(), thumbnailKey: text("thumbnail_key"),
-  tier: text("tier").$type<Plan>().notNull().default("growth"), status: text("status").notNull().default("published"),
+  tier: text("tier").$type<Plan>().notNull().default("growth"),
+  status: text("status").$type<"processing" | "published" | "failed" | "archived">().notNull().default("published"),
+  ingestBatchId: uuid("ingest_batch_id").references(() => ugcClipBatches.id),
   createdAt: now(),
-});
+}, (t) => [
+  index("ugc_status_tier").on(t.status, t.tier),
+  index("ugc_category").on(t.category),
+  index("ugc_created_at").on(t.createdAt),
+  index("ugc_style_gin").using("gin", t.styleTags),
+]);
 export type Platform = "tiktok" | "instagram" | "youtube" | "linkedin";
 export type TrendRecipe = { structure: { segment: string; seconds: number; text_slot?: string }[]; style: string; sound?: string; why_it_works?: string };
 export const trends = pgTable("trends", {
@@ -158,6 +175,8 @@ export const aiModels = pgTable("ai_models", {
 export type ContentFormat = "ai_ugc" | "human_ugc" | "slideshow" | "hook_demo" | "meme" | "remix" | "upload";
 export type ContentStatus = "generating" | "candidate" | "skipped" | "saved" | "draft" | "scheduled" | "published" | "failed" | "archived";
 export type ContentMedia = { video_key?: string; image_keys?: string[]; thumbnail_key?: string; duration_ms?: number; width?: number; height?: number };
+export type OverlayPosition = "top" | "center" | "bottom";
+export type OverlayStyle = { font_family?: string; font_size_px?: number; bold?: boolean; color?: string; position?: OverlayPosition; background_opacity?: number };
 export const generationBatches = pgTable("generation_batches", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -181,6 +200,7 @@ export const contentItems = pgTable("content_items", {
   characterId: uuid("character_id").references(() => characters.id), ugcClipId: uuid("ugc_clip_id").references(() => ugcClips.id),
   trendId: uuid("trend_id").references(() => trends.id), templateId: uuid("template_id").references(() => templates.id),
   media: jsonb("media").$type<ContentMedia>().default({}).notNull(),
+  overlayStyle: jsonb("overlay_style").$type<OverlayStyle>(),
   provenance: jsonb("provenance").$type<Record<string, unknown>>().default({}).notNull(),
   predictedScore: numeric("predicted_score"),
   isAiGenerated: boolean("is_ai_generated").default(true).notNull(),
@@ -247,6 +267,7 @@ export const accountMetrics = pgTable("account_metrics", {
 export type AutomationConfig = {
   social_account_ids: string[]; posts_per_day: number; horizon_days: number; times: string[]; weekdays: number[];
   format_mix: Partial<Record<ContentFormat, number>>; character_ids?: string[]; language?: string;
+  ugc_style_tags?: string[]; ugc_categories?: string[];
   source: "generate" | "library" | "mixed"; min_spacing_minutes: number; max_per_platform_per_day: number;
 };
 export const automations = pgTable("automations", {

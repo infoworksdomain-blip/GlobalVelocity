@@ -13,7 +13,7 @@ import { publicUrl } from "@/lib/storage";
 import { getPublisher } from "@/lib/publishers";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { canUseCharacterTier, assertCanSave } from "@/lib/tenancy";
-import { PLANS } from "@/lib/plans";
+import { PLANS, PLAN_ORDER, tierRank } from "@/lib/plans";
 import { planAutomation } from "@/lib/automations";
 import type { ContentFormat, Plan } from "@/db/schema";
 
@@ -55,7 +55,7 @@ async function generateBatch(job: Job<{ batchId: string }>) {
   if (!profile) { await db.update(generationBatches).set({ status: "failed" }).where(eq(generationBatches.id, batch.id)); return; }
   const ws = (await db.query.workspaces.findFirst({ where: eq(workspaces.id, batch.workspaceId) }))!;
   const acc = (await db.query.accounts.findFirst({ where: eq(accounts.id, ws.accountId) }))!;
-  const params = batch.params as { formats?: ContentFormat[]; character_ids?: string[]; trend_ids?: string[]; language?: string; similar_to?: string; angle_hints?: string[] };
+  const params = batch.params as { formats?: ContentFormat[]; character_ids?: string[]; trend_ids?: string[]; language?: string; similar_to?: string; angle_hints?: string[]; ugc_categories?: string[]; ugc_style_tags?: string[] };
   await db.update(generationBatches).set({ status: "running" }).where(eq(generationBatches.id, batch.id));
 
   const recent = await db.select({ angle: contentItems.angle }).from(contentItems).where(eq(contentItems.workspaceId, batch.workspaceId)).orderBy(desc(contentItems.createdAt)).limit(60);
@@ -65,8 +65,17 @@ async function generateBatch(job: Job<{ batchId: string }>) {
   const pool = await db.select().from(characters).where(and(eq(characters.status, "published"), params.character_ids?.length ? inArray(characters.id, params.character_ids) : sql`(${characters.ownerAccountId} is null or ${characters.ownerAccountId} = ${acc.id})`));
   const usable = pool.filter((c) => c.ownerAccountId === acc.id || canUseCharacterTier(acc.plan, c.tier));
   const trendRows = params.trend_ids?.length ? await db.select().from(trends).where(inArray(trends.id, params.trend_ids)) : await db.select().from(trends).where(eq(trends.status, "active")).orderBy(desc(trends.velocityScore)).limit(20);
-  const clips = (await db.select().from(ugcClips).where(eq(ugcClips.status, "published"))).filter((c) => canUseCharacterTier(acc.plan, c.tier) && (!c.licenceExpiresAt || c.licenceExpiresAt > new Date()));
   const ugcQuota = PLANS[acc.plan].limits.ugcClipsMonthly; let ugcUsed = 0;
+  // Only touch ugc_clips (can be a 25k-row table) when human_ugc is actually part of this batch's mix.
+  const allowedTiers = PLAN_ORDER.filter((t) => tierRank(PLANS[acc.plan].limits.characterTier) >= tierRank(t));
+  const clips = mix.human_ugc > 0 && allowedTiers.length
+    ? await db.select().from(ugcClips).where(and(
+        eq(ugcClips.status, "published"), inArray(ugcClips.tier, allowedTiers),
+        sql`(${ugcClips.licenceExpiresAt} is null or ${ugcClips.licenceExpiresAt} > now())`,
+        params.ugc_categories?.length ? inArray(ugcClips.category, params.ugc_categories) : undefined,
+        params.ugc_style_tags?.length ? sql`${ugcClips.styleTags} && array[${sql.join(params.ugc_style_tags.map((t) => sql`${t}`), sql.raw(","))}]::text[]` : undefined,
+      )).orderBy(sql`random()`).limit(batch.requestedCount * 3)
+    : [];
 
   let acc_w = 0; const cumulative = formats.map(([f, w]) => [f, (acc_w += w)] as [string, number]);
   const pick = (i: number): ContentFormat => { const r = ((i * 0.618033) % 1) * acc_w; return (cumulative.find(([, c]) => r <= c)?.[0] ?? "slideshow") as ContentFormat; };
@@ -222,7 +231,7 @@ async function automationRun(job: Job<{ automationId: string; runId?: string }>)
     if (a.config.source !== "library") {
       const need = plan.slots.length - pool.length;
       if (need > 0) {
-        const [b] = await db.insert(generationBatches).values({ workspaceId: a.workspaceId, source: "automation", requestedCount: need, params: { formats: Object.entries(a.config.format_mix).filter(([, w]) => (w ?? 0) > 0).map(([f]) => f), character_ids: a.config.character_ids, language: a.config.language } }).returning();
+        const [b] = await db.insert(generationBatches).values({ workspaceId: a.workspaceId, source: "automation", requestedCount: need, params: { formats: Object.entries(a.config.format_mix).filter(([, w]) => (w ?? 0) > 0).map(([f]) => f), character_ids: a.config.character_ids, language: a.config.language, ugc_categories: a.config.ugc_categories, ugc_style_tags: a.config.ugc_style_tags } }).returning();
         await generateBatch({ data: { batchId: b.id } } as Job<{ batchId: string }>);
         // process items inline so the run completes deterministically
         const its = await db.select().from(contentItems).where(eq(contentItems.batchId, b.id));
