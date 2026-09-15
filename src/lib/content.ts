@@ -8,6 +8,7 @@ export function serializeItem(i: typeof schema.contentItems.$inferSelect, extra:
     id: i.id, workspace_id: i.workspaceId, batch_id: i.batchId, format: i.format, status: i.status, angle: i.angle, hook: i.hook, script: i.script,
     on_screen_text: i.onScreenText, caption: i.caption, hashtags: i.hashtags, language: i.language, character_id: i.characterId, trend_id: i.trendId,
     media: { video_url: publicUrl(i.media.video_key), image_urls: (i.media.image_keys ?? []).map((k) => publicUrl(k)), thumbnail_url: publicUrl(i.media.thumbnail_key), duration_ms: i.media.duration_ms, width: i.media.width, height: i.media.height },
+    overlay_style: i.overlayStyle,
     provenance: i.provenance, predicted_score: i.predictedScore ? Number(i.predictedScore) : null, is_ai_generated: i.isAiGenerated, moderation: i.moderation,
     saved_at: i.savedAt, created_at: i.createdAt, updated_at: i.updatedAt, ...extra,
   };

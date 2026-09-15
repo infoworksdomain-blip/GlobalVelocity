@@ -7,7 +7,7 @@ import sharp from "sharp";
 import * as R from "@/lib/render";
 import { publicUrl } from "@/lib/storage";
 import { consumeCredits, refundCredits } from "@/lib/tenancy";
-import type { ContentMedia, ContentFormat, CompanyProfileData, TrendRecipe } from "@/db/schema";
+import type { ContentMedia, ContentFormat, CompanyProfileData, TrendRecipe, OverlayStyle } from "@/db/schema";
 import type { Copy } from "@/lib/generation";
 
 const exec = promisify(execFile);
@@ -17,11 +17,11 @@ const preset = () => (process.env.PROVIDER_MODE === "live" ? "veryfast" : "ultra
 export type RenderCtx = {
   prepaid?: boolean; requestedSeconds?: number; itemId: string; workspaceId: string; accountId: string; format: ContentFormat; profile: CompanyProfileData;
   screenshot: Buffer | null; demoVideo: Buffer | null; character: { id: string; name: string; referenceImages: string[]; voiceId: string | null } | null;
-  clip: { storageKey: string; licenceType: "audio_replace" | "subtitle_only"; durationMs: number } | null; trend: TrendRecipe | null;
+  clip: { storageKey: string; licenceType: "audio_replace" | "subtitle_only"; durationMs: number } | null; trend: TrendRecipe | null; overlayStyle: OverlayStyle | null;
 };
 
 /** Overlay caption beats onto b-roll video (demo video or human UGC clip), cut to the total beat length, muted or with supplied audio. */
-async function overlayBeatsOnVideo(video: Buffer, beats: { text: string; seconds: number }[], brand: R.Brand, audio: Buffer | null, keepOriginalAudio: boolean) {
+async function overlayBeatsOnVideo(video: Buffer, beats: { text: string; seconds: number }[], brand: R.Brand, audio: Buffer | null, keepOriginalAudio: boolean, style?: OverlayStyle | null) {
   const dir = await mkdtemp(join(tmpdir(), "vel-"));
   try {
     const inp = join(dir, "in.mp4"); await writeFile(inp, video);
@@ -29,7 +29,7 @@ async function overlayBeatsOnVideo(video: Buffer, beats: { text: string; seconds
     const inputs = ["-y", "-stream_loop", "-1", "-i", inp];
     let t = 0; const filters: string[] = ["[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p[base]"]; let last = "base";
     for (let i = 0; i < beats.length; i++) {
-      const f = join(dir, `o${i}.png`); await writeFile(f, await captionOverlay(beats[i].text, brand));
+      const f = join(dir, `o${i}.png`); await writeFile(f, await captionOverlay(beats[i].text, brand, style));
       inputs.push("-i", f);
       filters.push(`[${last}][${i + 1}:v]overlay=0:0:enable='between(t,${t},${t + beats[i].seconds})'[v${i}]`); last = `v${i}`; t += beats[i].seconds;
     }
@@ -43,11 +43,14 @@ async function overlayBeatsOnVideo(video: Buffer, beats: { text: string; seconds
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 /** Transparent PNG with a caption pill for overlaying on video. */
-async function captionOverlay(line: string, brand: R.Brand) {
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+async function captionOverlay(line: string, brand: R.Brand, style?: OverlayStyle | null) {
+  const s = R.resolveOverlayStyle(style);
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const words = line.split(/\s+/); const lines: string[] = []; let cur = ""; for (const w of words) { if ((cur + " " + w).trim().length > 20) { lines.push(cur); cur = w; } else cur = (cur + " " + w).trim(); } if (cur) lines.push(cur);
-  const y0 = R.H / 2 - (lines.length - 1) * 56;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${R.W}" height="${R.H}"><rect x="60" y="${y0 - 120}" width="${R.W - 120}" height="${lines.length * 112 + 120}" rx="36" fill="${brand.secondary}" fill-opacity="0.75"/>${lines.map((l, i) => `<text x="${R.W / 2}" y="${y0 + 20 + i * 112}" font-family="DejaVu Sans, Arial" font-size="88" font-weight="800" fill="#fff" text-anchor="middle">${esc(l)}</text>`).join("")}</svg>`;
+  const boxHeight = lines.length * 112 + 120;
+  const centerY = s.position === "top" ? 60 + boxHeight / 2 : s.position === "bottom" ? R.H - 60 - boxHeight / 2 : R.H / 2;
+  const y0 = centerY - (lines.length - 1) * 56;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${R.W}" height="${R.H}"><rect x="60" y="${centerY - boxHeight / 2}" width="${R.W - 120}" height="${boxHeight}" rx="36" fill="${brand.secondary}" fill-opacity="0.75"/>${lines.map((l, i) => `<text x="${R.W / 2}" y="${y0 + 20 + i * 112 * (s.fontSizePx / 88)}" font-family="${esc(s.fontFamily)}" font-size="${s.fontSizePx}" font-weight="${s.weight}" fill="${s.color}" text-anchor="middle">${esc(l)}</text>`).join("")}</svg>`;
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
@@ -67,15 +70,15 @@ export async function renderMedia(ctx: RenderCtx, copy: Copy): Promise<{ media: 
     media.image_keys = [await R.store(`${prefix}/meme.png`, png, "image/png")]; media.thumbnail_key = media.image_keys[0];
   } else if (ctx.format === "hook_demo" || ctx.format === "remix") {
     const beats = ctx.format === "remix" && ctx.trend ? ctx.trend.structure.map((s, i) => ({ text: copy.on_screen_text[i] ?? s.text_slot ?? s.segment, seconds: s.seconds })) : [{ text: copy.hook, seconds: 3 }, ...copy.on_screen_text.slice(1).map((t) => ({ text: t, seconds: 3 }))];
-    if (ctx.demoVideo) { const { mp4, durationMs } = await overlayBeatsOnVideo(ctx.demoVideo, beats, brand, null, false); await storeVideo(mp4, durationMs); }
-    else { const frames = []; for (const b of beats) frames.push({ png: await R.renderCaptionFrame(b.text, brand, undefined, ctx.screenshot), seconds: b.seconds }); const { mp4, durationMs } = await R.framesToVideo(frames); await storeVideo(mp4, durationMs); }
+    if (ctx.demoVideo) { const { mp4, durationMs } = await overlayBeatsOnVideo(ctx.demoVideo, beats, brand, null, false, ctx.overlayStyle); await storeVideo(mp4, durationMs); }
+    else { const frames = []; for (const b of beats) frames.push({ png: await R.renderCaptionFrame(b.text, brand, undefined, ctx.screenshot, ctx.overlayStyle), seconds: b.seconds }); const { mp4, durationMs } = await R.framesToVideo(frames); await storeVideo(mp4, durationMs); }
   } else if (ctx.format === "human_ugc") {
     if (!ctx.clip) throw new Error("No licensed UGC clip available for this item");
     const clip = await fetchBuf(publicUrl(ctx.clip.storageKey)); if (!clip) throw new Error("UGC clip not readable");
     const { audio, durationMs } = await R.tts(copy.script, null);
     const seconds = Math.min(Math.round(ctx.clip.durationMs / 1000) || 30, Math.max(15, Math.ceil(durationMs / 1000)));
     const beats = copy.on_screen_text.length ? copy.on_screen_text.map((t) => ({ text: t, seconds: seconds / copy.on_screen_text.length })) : [{ text: copy.hook, seconds }];
-    const { mp4 } = await overlayBeatsOnVideo(clip, beats, brand, ctx.clip.licenceType === "audio_replace" ? audio : null, ctx.clip.licenceType !== "audio_replace");
+    const { mp4 } = await overlayBeatsOnVideo(clip, beats, brand, ctx.clip.licenceType === "audio_replace" ? audio : null, ctx.clip.licenceType !== "audio_replace", ctx.overlayStyle);
     const fin = await R.finalizeVideo(mp4, R.scriptToSrt(copy.script, seconds * 1000)); await storeVideo(fin.mp4, fin.durationMs);
   } else if (ctx.format === "ai_ugc") {
     const { audio, durationMs } = await R.tts(copy.script, ctx.character?.voiceId ?? null);
@@ -85,7 +88,7 @@ export async function renderMedia(ctx: RenderCtx, copy: Copy): Promise<{ media: 
     let mp4: Buffer | null = null;
     try { mp4 = (await R.talkingHead({ script: copy.script, audio, characterImageUrl: ctx.character?.referenceImages[0] ?? null, voiceId: ctx.character?.voiceId ?? null, characterId: ctx.character?.id ?? null })).mp4; }
     catch (e) { if (creditsUsed) await refundCredits(ctx.accountId, creditsUsed, "content_item", ctx.itemId); throw e; }
-    if (!mp4) { const charImg = await fetchBuf(ctx.character?.referenceImages[0]); const frame = await R.renderCaptionFrame(copy.hook, brand, ctx.character ? `${ctx.character.name} · AI UGC (preview render)` : "AI UGC (preview render)", charImg ?? ctx.screenshot); mp4 = (await R.framesToVideo([{ png: frame, seconds }], audio)).mp4; }
+    if (!mp4) { const charImg = await fetchBuf(ctx.character?.referenceImages[0]); const frame = await R.renderCaptionFrame(copy.hook, brand, ctx.character ? `${ctx.character.name} · AI UGC (preview render)` : "AI UGC (preview render)", charImg ?? ctx.screenshot, ctx.overlayStyle); mp4 = (await R.framesToVideo([{ png: frame, seconds }], audio)).mp4; }
     const fin = await R.finalizeVideo(mp4, R.scriptToSrt(copy.script, seconds * 1000)); await storeVideo(fin.mp4, fin.durationMs);
   } else { throw new Error(`Cannot render format ${ctx.format}`); }
   return { media, creditsUsed };

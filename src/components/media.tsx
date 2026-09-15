@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import { FORMAT_LABEL } from "@/lib/api";
-export type Item = { id: string; format: string; status: string; hook: string | null; script: string | null; caption: string | null; hashtags: string[]; on_screen_text: string[]; predicted_score: number | null; character?: { name: string } | null; media: { video_url: string | null; image_urls: (string | null)[]; thumbnail_url: string | null; duration_ms?: number }; created_at: string };
+export type OverlayStyle = { font_family?: string; font_size_px?: number; bold?: boolean; color?: string; position?: "top" | "center" | "bottom" };
+export type Item = { id: string; format: string; status: string; hook: string | null; script: string | null; caption: string | null; hashtags: string[]; on_screen_text: string[]; predicted_score: number | null; character?: { name: string } | null; media: { video_url: string | null; image_urls: (string | null)[]; thumbnail_url: string | null; duration_ms?: number }; overlay_style?: OverlayStyle | null; created_at: string };
 /** 9:16 media preview: video with poster, or image carousel for slideshows/memes. */
 export function MediaPreview({ item, className = "", autoPlay = false }: { item: Item; className?: string; autoPlay?: boolean }) {
   const [idx, setIdx] = useState(0); const imgs = item.media.image_urls.filter(Boolean) as string[];

@@ -6,6 +6,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { putObject } from "@/lib/storage";
 import { CREDIT_TARIFF } from "@/lib/plans";
+import type { OverlayStyle } from "@/db/schema";
 
 const exec = promisify(execFile);
 export const W = 1080, H = 1920;
@@ -17,12 +18,26 @@ function wrap(text: string, maxChars: number) {
   for (const w of words) { if ((cur + " " + w).trim().length > maxChars) { if (cur) lines.push(cur); cur = w; } else cur = (cur + " " + w).trim(); }
   if (cur) lines.push(cur); return lines;
 }
-function textBlock(lines: string[], x: number, y: number, size: number, opts: { weight?: number; fill?: string; anchor?: string; lineHeight?: number; stroke?: boolean } = {}) {
+function textBlock(lines: string[], x: number, y: number, size: number, opts: { weight?: number; fill?: string; anchor?: string; lineHeight?: number; stroke?: boolean; fontFamily?: string } = {}) {
   const lh = opts.lineHeight ?? size * 1.15;
-  return lines.map((l, i) => `<text x="${x}" y="${y + i * lh}" font-family="DejaVu Sans, Arial, sans-serif" font-size="${size}" font-weight="${opts.weight ?? 800}" fill="${opts.fill ?? "#fff"}" text-anchor="${opts.anchor ?? "middle"}" ${opts.stroke ? 'stroke="#000" stroke-width="10" paint-order="stroke"' : ""}>${esc(l)}</text>`).join("");
+  return lines.map((l, i) => `<text x="${x}" y="${y + i * lh}" font-family="${esc(opts.fontFamily ?? "DejaVu Sans, Arial, sans-serif")}" font-size="${size}" font-weight="${opts.weight ?? 800}" fill="${opts.fill ?? "#fff"}" text-anchor="${opts.anchor ?? "middle"}" ${opts.stroke ? 'stroke="#000" stroke-width="10" paint-order="stroke"' : ""}>${esc(l)}</text>`).join("");
 }
 
 export type Brand = { primary: string; secondary: string; name: string };
+
+/** Resolved, always-present overlay style -- callers never see undefined fields. Defaults reproduce the
+ *  look every caption/overlay had before per-item styling existed (non-negotiable: passing no style must
+ *  render pixel-identically to the old hardcoded values). */
+export type ResolvedOverlayStyle = { fontFamily: string; fontSizePx: number; weight: number; color: string; position: "top" | "center" | "bottom" };
+export function resolveOverlayStyle(style: OverlayStyle | null | undefined): ResolvedOverlayStyle {
+  return {
+    fontFamily: style?.font_family || "DejaVu Sans, Arial, sans-serif",
+    fontSizePx: style?.font_size_px ?? 88,
+    weight: style?.bold === false ? 500 : 800,
+    color: style?.color || "#ffffff",
+    position: style?.position ?? "center",
+  };
+}
 
 /** Slide image: gradient background, big title, body, footer brand chip, optional screenshot. */
 export async function renderSlide(i: number, total: number, title: string, body: string, brand: Brand, screenshot?: Buffer | null): Promise<Buffer> {
@@ -54,13 +69,18 @@ export async function renderMeme(top: string, bottom: string, brand: Brand, base
   return canvas;
 }
 
+const overlayY0 = (position: ResolvedOverlayStyle["position"], boxHeight: number) => position === "top" ? 60 + boxHeight / 2 : position === "bottom" ? H - 60 - boxHeight / 2 : H / 2;
+
 /** Caption card used for hook+demo videos and as the visual bed under UGC audio when no talking-head provider is configured. */
-export async function renderCaptionFrame(line: string, brand: Brand, sub?: string, bg?: Buffer | null): Promise<Buffer> {
+export async function renderCaptionFrame(line: string, brand: Brand, sub?: string, bg?: Buffer | null, style?: OverlayStyle | null): Promise<Buffer> {
+  const s = resolveOverlayStyle(style);
   const ls = wrap(line, 20);
+  const boxHeight = ls.length * 112 + 120;
+  const centerY = overlayY0(s.position, boxHeight);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
     <rect width="${W}" height="${H}" fill="${bg ? "#00000066" : brand.secondary}"/>
-    <rect x="60" y="${H / 2 - 60 - ls.length * 56}" width="${W - 120}" height="${ls.length * 112 + 120}" rx="36" fill="#000000aa"/>
-    ${textBlock(ls, W / 2, H / 2 + 20 - (ls.length - 1) * 56, 88, { lineHeight: 112, fill: "#fff" })}
+    <rect x="60" y="${centerY - boxHeight / 2}" width="${W - 120}" height="${boxHeight}" rx="36" fill="#000000aa"/>
+    ${textBlock(ls, W / 2, centerY + 20 - (ls.length - 1) * 56, s.fontSizePx, { lineHeight: s.fontSizePx * (112 / 88), fill: s.color, weight: s.weight, fontFamily: s.fontFamily })}
     ${sub ? `<text x="${W / 2}" y="${H - 220}" font-family="DejaVu Sans, Arial" font-size="42" fill="#ffffffcc" text-anchor="middle">${esc(sub)}</text>` : ""}
   </svg>`;
   if (bg) return sharp(await sharp(bg).resize(W, H, { fit: "cover" }).png().toBuffer()).composite([{ input: Buffer.from(svg) }]).png().toBuffer();
