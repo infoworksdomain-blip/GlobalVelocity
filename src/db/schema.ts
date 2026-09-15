@@ -112,6 +112,7 @@ export const characters = pgTable("characters", {
   language: text("language").default("en").notNull(),
   referenceImages: jsonb("reference_images").$type<string[]>().default([]).notNull(),
   sampleVideoUrl: text("sample_video_url"), voiceId: text("voice_id"),
+  heygenTalkingPhotoId: text("heygen_talking_photo_id"),
   tier: text("tier").$type<Plan>().notNull().default("pro"),
   status: text("status").$type<"draft" | "published" | "retired">().notNull().default("published"),
   createdAt: now(),

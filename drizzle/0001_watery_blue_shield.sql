@@ -1,0 +1,1 @@
+ALTER TABLE "characters" ADD COLUMN "heygen_talking_photo_id" text;

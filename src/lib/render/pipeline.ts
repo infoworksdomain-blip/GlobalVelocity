@@ -16,7 +16,7 @@ const preset = () => (process.env.PROVIDER_MODE === "live" ? "veryfast" : "ultra
 
 export type RenderCtx = {
   prepaid?: boolean; requestedSeconds?: number; itemId: string; workspaceId: string; accountId: string; format: ContentFormat; profile: CompanyProfileData;
-  screenshot: Buffer | null; demoVideo: Buffer | null; character: { name: string; referenceImages: string[]; voiceId: string | null } | null;
+  screenshot: Buffer | null; demoVideo: Buffer | null; character: { id: string; name: string; referenceImages: string[]; voiceId: string | null } | null;
   clip: { storageKey: string; licenceType: "audio_replace" | "subtitle_only"; durationMs: number } | null; trend: TrendRecipe | null;
 };
 
@@ -83,7 +83,7 @@ export async function renderMedia(ctx: RenderCtx, copy: Copy): Promise<{ media: 
     const providerLive = process.env.PROVIDER_MODE === "live" && !!process.env.VIDEO_PROVIDER_URL;
     if (providerLive && !ctx.prepaid) { creditsUsed = R.videoCredits(seconds); await consumeCredits(ctx.accountId, creditsUsed, "video", "content_item", ctx.itemId); }
     let mp4: Buffer | null = null;
-    try { mp4 = (await R.talkingHead({ script: copy.script, audio, characterImageUrl: ctx.character?.referenceImages[0] ?? null, voiceId: ctx.character?.voiceId ?? null })).mp4; }
+    try { mp4 = (await R.talkingHead({ script: copy.script, audio, characterImageUrl: ctx.character?.referenceImages[0] ?? null, voiceId: ctx.character?.voiceId ?? null, characterId: ctx.character?.id ?? null })).mp4; }
     catch (e) { if (creditsUsed) await refundCredits(ctx.accountId, creditsUsed, "content_item", ctx.itemId); throw e; }
     if (!mp4) { const charImg = await fetchBuf(ctx.character?.referenceImages[0]); const frame = await R.renderCaptionFrame(copy.hook, brand, ctx.character ? `${ctx.character.name} · AI UGC (preview render)` : "AI UGC (preview render)", charImg ?? ctx.screenshot); mp4 = (await R.framesToVideo([{ png: frame, seconds }], audio)).mp4; }
     const fin = await R.finalizeVideo(mp4, R.scriptToSrt(copy.script, seconds * 1000)); await storeVideo(fin.mp4, fin.durationMs);
