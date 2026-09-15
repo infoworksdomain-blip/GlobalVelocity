@@ -12,11 +12,39 @@ export default function Admin() {
   const [q, setQ] = useState(""); const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [trendJson, setTrendJson] = useState(""); const [clip, setClip] = useState({ storage_key: "", creator_name: "", duration_ms: 30000, licence_type: "audio_replace", style_tags: "", tier: "growth" });
   const [reqId, setReqId] = useState(0);
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
+  const [bulkMeta, setBulkMeta] = useState({ category: "", style_tags: "", gender: "", setting: "", licence_type: "audio_replace", tier: "growth" });
+  const [bulkProgress, setBulkProgress] = useState<{ uploaded: number; total: number; batchId: string | null; completed: number; failed: number; status: string } | null>(null);
   // Guard against out-of-order responses when switching tabs quickly: only the latest request may set state.
   const load = (v = view, query = q) => { const id = reqId + 1; setReqId(id); setData(null); api<Record<string, unknown>>(`/admin?view=${v}${query ? `&q=${encodeURIComponent(query)}` : ""}`).then((d) => setReqId((cur) => { if (cur === id) setData(d); return cur; })).catch((e) => setReqId((cur) => { if (cur === id) setData({ error: e.message }); return cur; })); };
   useEffect(() => { if (view === "curation") setData({}); else load(view, ""); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [view]);
   const act = (body: Record<string, unknown>, msg: string) => run(async () => { await api("/admin", { method: "POST", json: body }); load(); setDetail(null); }, msg);
   const money = (c: number) => `$${(c / 100).toFixed(2)}`;
+  const runBulkUpload = () => run(async () => {
+    const styleTags = bulkMeta.style_tags.split(",").map((x) => x.trim()).filter(Boolean);
+    setBulkProgress({ uploaded: 0, total: bulkFiles.length, batchId: null, completed: 0, failed: 0, status: "uploading" });
+    let batchId: string | null = null;
+    const CHUNK = 40;
+    for (let i = 0; i < bulkFiles.length; i += CHUNK) {
+      const slice = bulkFiles.slice(i, i + CHUNK);
+      const { uploads } = await api<{ uploads: { key: string; upload_url: string }[] }>("/admin/ugc-clips/batch-presign", { method: "POST", json: { files: slice.map((f) => ({ filename: f.name, content_type: f.type || "video/mp4" })) } });
+      for (let j = 0; j < slice.length; j++) {
+        await fetch(uploads[j].upload_url, { method: "PUT", body: slice[j], headers: { "content-type": slice[j].type || "video/mp4" } });
+        setBulkProgress((p) => p && { ...p, uploaded: p.uploaded + 1 });
+      }
+      const regResult: { batch_id: string; registered: number } = await api("/admin/ugc-clips/batch-register", { method: "POST", json: { batch_id: batchId ?? undefined, clips: uploads.map((u) => ({ storage_key: u.key, category: bulkMeta.category || undefined, style_tags: styleTags, gender: bulkMeta.gender || undefined, setting: bulkMeta.setting || undefined, licence_type: bulkMeta.licence_type, tier: bulkMeta.tier })) } });
+      batchId = regResult.batch_id;
+    }
+    setBulkProgress((p) => p && { ...p, batchId, status: "processing" });
+    const poll = async () => {
+      if (!batchId) return;
+      const { batch } = await api<{ batch: { completedCount: number; failedCount: number; requestedCount: number; status: string } }>(`/admin/ugc-clip-batches/${batchId}`);
+      setBulkProgress((p) => p && { ...p, completed: batch.completedCount, failed: batch.failedCount, status: batch.status });
+      if (batch.status !== "done") setTimeout(poll, 3000);
+    };
+    poll();
+    setBulkFiles([]);
+  }, "Bulk upload started");
 
   return (
     <div className="space-y-5">{wall}
@@ -83,6 +111,27 @@ export default function Admin() {
               <input className="input" placeholder="ws/…/assets/clip.mp4" value={clip.storage_key} onChange={(e) => setClip({ ...clip, storage_key: e.target.value })} /><input className="input" placeholder="Creator name" value={clip.creator_name} onChange={(e) => setClip({ ...clip, creator_name: e.target.value })} /><input className="input" placeholder="Style tags, comma separated" value={clip.style_tags} onChange={(e) => setClip({ ...clip, style_tags: e.target.value })} />
               <div className="grid grid-cols-3 gap-2"><input type="number" className="input" value={clip.duration_ms} onChange={(e) => setClip({ ...clip, duration_ms: Number(e.target.value) })} /><select className="input" value={clip.licence_type} onChange={(e) => setClip({ ...clip, licence_type: e.target.value })}><option value="audio_replace">Audio replace</option><option value="subtitle_only">Subtitle only</option></select><select className="input" value={clip.tier} onChange={(e) => setClip({ ...clip, tier: e.target.value })}><option>starter</option><option>growth</option><option>pro</option></select></div>
               <button className="btn-primary" onClick={() => run(async () => { await api("/admin/ugc-clips", { method: "POST", json: { ...clip, style_tags: clip.style_tags.split(",").map((x) => x.trim()).filter(Boolean) } }); }, "Clip registered")}>Register</button></div>
+
+            <div className="card p-5 space-y-2 md:col-span-2"><h2 className="font-semibold">Bulk upload UGC clips</h2><p className="text-xs text-slate-500">Select up to thousands of video files at once. Uploads go direct to storage; thumbnails and durations are extracted in the background — this page stays usable while that runs.</p>
+              <input type="file" accept="video/*" multiple className="input" onChange={(e) => setBulkFiles(Array.from(e.target.files ?? []))} />
+              {bulkFiles.length > 0 && <p className="text-xs text-slate-500">{bulkFiles.length} files selected</p>}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <input className="input" placeholder="Category (e.g. fitness)" value={bulkMeta.category} onChange={(e) => setBulkMeta({ ...bulkMeta, category: e.target.value })} />
+                <input className="input" placeholder="Style tags, comma separated" value={bulkMeta.style_tags} onChange={(e) => setBulkMeta({ ...bulkMeta, style_tags: e.target.value })} />
+                <input className="input" placeholder="Setting (e.g. gym)" value={bulkMeta.setting} onChange={(e) => setBulkMeta({ ...bulkMeta, setting: e.target.value })} />
+                <select className="input" value={bulkMeta.gender} onChange={(e) => setBulkMeta({ ...bulkMeta, gender: e.target.value })}><option value="">Any gender</option><option value="male">Male</option><option value="female">Female</option></select>
+                <select className="input" value={bulkMeta.licence_type} onChange={(e) => setBulkMeta({ ...bulkMeta, licence_type: e.target.value })}><option value="audio_replace">Audio replace</option><option value="subtitle_only">Subtitle only</option></select>
+                <select className="input" value={bulkMeta.tier} onChange={(e) => setBulkMeta({ ...bulkMeta, tier: e.target.value })}><option value="free">free</option><option value="starter">starter</option><option value="growth">growth</option><option value="pro">pro</option></select>
+              </div>
+              <p className="text-xs text-slate-400">This metadata applies to the whole selection. Upload files with different categories/tags in separate batches.</p>
+              <button className="btn-primary" disabled={!bulkFiles.length} onClick={runBulkUpload}>Upload {bulkFiles.length || ""} clips</button>
+              {bulkProgress && <div className="rounded-xl bg-slate-50 p-3 text-xs space-y-1">
+                <div className="flex justify-between"><span>Uploading</span><b>{bulkProgress.uploaded} / {bulkProgress.total}</b></div>
+                <div className="h-1.5 rounded-full bg-slate-200"><div className="h-1.5 rounded-full bg-brand-600" style={{ width: `${bulkProgress.total ? (100 * bulkProgress.uploaded) / bulkProgress.total : 0}%` }} /></div>
+                {bulkProgress.batchId && <div className="flex justify-between pt-1"><span>Processing (thumbnails/duration)</span><b>{bulkProgress.completed + bulkProgress.failed} / {bulkProgress.total} — {bulkProgress.status}</b></div>}
+                {bulkProgress.failed > 0 && <div className="text-red-600">{bulkProgress.failed} failed to process</div>}
+              </div>}
+            </div>
           </div>}
 
           {view === "audit" && data.audit !== undefined && <div className="card overflow-hidden"><table className="table"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead><tbody>{(data.audit as unknown as { id: number; action: string; actorType: string; createdAt: string; meta: unknown }[]).map((a) => <tr key={a.id}><td className="text-slate-500 whitespace-nowrap">{new Date(a.createdAt).toLocaleString()}</td><td>{a.actorType}</td><td className="font-mono text-xs">{a.action}</td><td className="text-slate-500 text-xs max-w-md truncate">{JSON.stringify(a.meta)}</td></tr>)}</tbody></table></div>}

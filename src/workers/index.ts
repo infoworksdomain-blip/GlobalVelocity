@@ -2,6 +2,7 @@ import "dotenv/config";
 import { Worker, type Job } from "bullmq";
 import { connection, coreQueue, renderQueue, enqueue } from "@/lib/queue";
 import { renderMedia, fetchBuf } from "@/lib/render/pipeline";
+import { thumbnail, store, probeDuration } from "@/lib/render";
 import { sendEmail } from "@/lib/email";
 import { emitEvent, deliver } from "@/lib/webhooks";
 import { db, schema } from "@/db";
@@ -17,7 +18,7 @@ import { PLANS, PLAN_ORDER, tierRank } from "@/lib/plans";
 import { planAutomation } from "@/lib/automations";
 import type { ContentFormat, Plan } from "@/db/schema";
 
-const { jobs, companyProfiles, workspaces, accounts, generationBatches, contentItems, characters, trends, scheduledPosts, socialAccounts, postMetrics, automations, automationRuns, notifications, workspaceMembers, brandAssets, ugcClips, users } = schema;
+const { jobs, companyProfiles, workspaces, accounts, generationBatches, contentItems, characters, trends, scheduledPosts, socialAccounts, postMetrics, automations, automationRuns, notifications, workspaceMembers, brandAssets, ugcClips, ugcClipBatches, users } = schema;
 
 async function setJob(id: string, patch: Partial<typeof jobs.$inferInsert>) { await db.update(jobs).set({ ...patch, updatedAt: new Date() }).where(eq(jobs.id, id)); }
 async function notify(workspaceId: string, type: string, title: string, body: string, link?: string) {
@@ -306,11 +307,36 @@ async function affiliatesSettle() {
   await db.update(schema.affiliateCommissions).set({ status: "approved" }).where(and(eq(schema.affiliateCommissions.status, "pending"), lte(schema.affiliateCommissions.createdAt, new Date(Date.now() - 30 * 86.4e6))));
 }
 
+// ---------------- ugc.thumbnail (bulk clip ingest) ----------------
+/** Probe real duration + extract a thumbnail for a bulk-uploaded UGC clip, then publish it. Split into its own
+ *  lightweight queue (see src/lib/queue.ts) so thumbnailing thousands of clips can't starve rendering or publishing. */
+async function ugcThumbnail(job: Job<{ clipId: string }>) {
+  const clip = await db.query.ugcClips.findFirst({ where: eq(ugcClips.id, job.data.clipId) });
+  if (!clip) return;
+  try {
+    const buf = await fetchBuf(publicUrl(clip.storageKey));
+    if (!buf) throw new Error("uploaded clip not readable from storage");
+    const [durationMs, thumbKey] = await Promise.all([probeDuration(buf), (async () => store(clip.storageKey.replace(/\.[^.]+$/, "") + "-thumb.jpg", await thumbnail(buf), "image/jpeg"))()]);
+    await db.update(ugcClips).set({ status: "published", durationMs, thumbnailKey: thumbKey }).where(eq(ugcClips.id, clip.id));
+    if (clip.ingestBatchId) await db.update(ugcClipBatches).set({ completedCount: sql`${ugcClipBatches.completedCount} + 1` }).where(eq(ugcClipBatches.id, clip.ingestBatchId));
+  } catch (e) {
+    await db.update(ugcClips).set({ status: "failed" }).where(eq(ugcClips.id, clip.id));
+    if (clip.ingestBatchId) await db.update(ugcClipBatches).set({ failedCount: sql`${ugcClipBatches.failedCount} + 1` }).where(eq(ugcClipBatches.id, clip.ingestBatchId));
+    throw e;
+  } finally {
+    if (clip.ingestBatchId) {
+      const [b] = await db.select().from(ugcClipBatches).where(eq(ugcClipBatches.id, clip.ingestBatchId)).limit(1);
+      if (b && b.completedCount + b.failedCount >= b.requestedCount && b.status !== "done") await db.update(ugcClipBatches).set({ status: "done", completedAt: new Date() }).where(eq(ugcClipBatches.id, b.id));
+    }
+  }
+}
+
 // ---------------- boot ----------------
 const handlers: Record<string, (job: Job) => Promise<void>> = {
   "profile.analyze": profileAnalyze, "generate.batch": generateBatch, "generate.item": generateItem, "publish.dispatch": publishDispatch, "publish.post": publishPost,
   "metrics.pull": metricsPull, "tokens.refresh": tokensRefresh, "automation.run": automationRun, "automations.tick": automationsTick, "credits.allocate": creditsAllocate, "cleanup": cleanup,
   "render.item": renderItem, "digest.weekly": digestWeekly, "trends.refresh": trendsRefresh, "webhook.deliver": webhookDeliver, "affiliates.settle": affiliatesSettle,
+  "ugc.thumbnail": ugcThumbnail,
 };
 async function main() {
   await coreQueue.upsertJobScheduler("publish-dispatch", { every: 60_000 }, { name: "publish.dispatch" });
@@ -324,7 +350,8 @@ async function main() {
   const wire = (w: Worker, tag: string) => { w.on("failed", (job, e) => console.error(`[${tag}] ${job?.name} ${job?.id} failed:`, e.message)); w.on("completed", (job) => { if (job.name !== "publish.dispatch" && job.name !== "automations.tick") console.log(`[${tag}] ${job.name} ${job.id} done`); }); };
   const core = new Worker("velocity-core", run, { connection, concurrency: Number(process.env.CORE_CONCURRENCY ?? 8) }); wire(core, "core");
   const render = new Worker("velocity-render", run, { connection, concurrency: Number(process.env.WORKER_CONCURRENCY ?? 3), lockDuration: 180_000 }); wire(render, "render");
-  const shutdown = async (sig: string) => { console.log(`[worker] ${sig} — finishing in-flight jobs`); await Promise.all([core.close(), render.close()]); process.exit(0); };
+  const ingest = new Worker("velocity-ingest", run, { connection, concurrency: Number(process.env.INGEST_CONCURRENCY ?? 4) }); wire(ingest, "ingest");
+  const shutdown = async (sig: string) => { console.log(`[worker] ${sig} — finishing in-flight jobs`); await Promise.all([core.close(), render.close(), ingest.close()]); process.exit(0); };
   process.on("SIGTERM", () => shutdown("SIGTERM")); process.on("SIGINT", () => shutdown("SIGINT"));
   void renderQueue;
   console.log("worker started (mode:", process.env.PROVIDER_MODE ?? "mock", ")");

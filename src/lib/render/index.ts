@@ -104,6 +104,16 @@ export async function thumbnail(mp4: Buffer): Promise<Buffer> {
   finally { await rm(dir, { recursive: true, force: true }); }
 }
 
+/** Probe a raw video buffer's duration (ms) without re-encoding -- used to ingest bulk-uploaded UGC clips. */
+export async function probeDuration(mp4: Buffer): Promise<number> {
+  const dir = await mkdtemp(join(tmpdir(), "vel-"));
+  try {
+    const inp = join(dir, "in.mp4"); await writeFile(inp, mp4);
+    const { stdout } = await exec("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", inp]);
+    return Math.round(parseFloat(stdout) * 1000);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+}
+
 /** Naive SRT from a script: ~3 words per cue spread over the duration (word-level TikTok-style captions). */
 export function scriptToSrt(script: string, durationMs: number) {
   const words = script.split(/\s+/).filter(Boolean); const per = 3; const cues = Math.ceil(words.length / per); const slot = durationMs / Math.max(cues, 1);
