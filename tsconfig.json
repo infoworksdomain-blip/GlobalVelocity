@@ -38,6 +38,7 @@
     "node_modules",
     "tests",
     "playwright.config.ts",
-    "scripts"
+    "scripts",
+    "_archive_socialblitz"
   ]
 }
