@@ -1,7 +1,7 @@
 import { route, parse } from "@/lib/route";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
-import { requireWorkspace, consumeCredits, assertCanSave } from "@/lib/tenancy";
+import { requireWorkspace, consumeCredits, assertCanSave, audit } from "@/lib/tenancy";
 import { videoCredits } from "@/lib/render";
 import { enqueue } from "@/lib/queue";
 import { moderateText } from "@/lib/llm";
@@ -18,5 +18,6 @@ export const POST = route(async ({ actor, body }) => {
   const [item] = await db.insert(schema.contentItems).values({ workspaceId: ws.id, format: "ai_ugc", status: "generating", hook: b.script.split(/[.!?]/)[0].slice(0, 80), script: b.script, caption: b.caption ?? "", onScreenText: [b.script.split(/[.!?]/)[0].slice(0, 80)], characterId: character?.id, isAiGenerated: true, provenance: { studio: "video", requested_seconds: b.seconds, credits_consumed: credits } }).returning();
   const [job] = await db.insert(schema.jobs).values({ workspaceId: ws.id, type: "render.item" }).returning();
   await enqueue("render.item", { itemId: item.id, jobId: job.id, finalStatus: "saved" }, { priority: 1 });
+  await audit({ accountId: ws.accountId, workspaceId: ws.id, actorId: actor.userId, action: "studio.video_generate", targetType: "content_item", targetId: item.id, meta: { credits, seconds: b.seconds } });
   return { item_id: item.id, job_id: job.id, credits_used: credits };
 });

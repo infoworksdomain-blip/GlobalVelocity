@@ -2,6 +2,7 @@ import { route, parse } from "@/lib/route";
 import { db, schema } from "@/db";
 import { eq, sql } from "drizzle-orm";
 import { err } from "@/lib/errors";
+import { audit } from "@/lib/tenancy";
 import { enqueue } from "@/lib/queue";
 import { z } from "zod";
 /**
@@ -37,5 +38,6 @@ export const POST = route(async ({ actor, body }) => {
   }))).returning({ id: schema.ugcClips.id });
 
   await Promise.all(rows.map((r) => enqueue("ugc.thumbnail", { clipId: r.id })));
+  await audit({ actorId: actor.userId, action: "ugc_clips.bulk_register", targetType: "ugc_clip_batch", targetId: batch.id, meta: { registered: rows.length } });
   return { batch_id: batch.id, registered: rows.length };
 });

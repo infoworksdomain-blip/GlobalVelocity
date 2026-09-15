@@ -128,5 +128,8 @@ export async function refundCredits(accountId: string, amount: number, refType: 
   if (amount > 0) await db.insert(creditLedger).values({ accountId, delta: amount, reason: "refund", refType, refId });
 }
 export async function audit(a: { accountId?: string; workspaceId?: string; actorId?: string | null; action: string; targetType?: string; targetId?: string; meta?: unknown }) {
-  await db.insert(schema.auditLog).values({ accountId: a.accountId, workspaceId: a.workspaceId, actorId: a.actorId ?? undefined, actorType: a.actorId ? "user" : "system", action: a.action, targetType: a.targetType, targetId: a.targetId, meta: a.meta as never }).catch(() => {});
+  // Fire-and-forget by design (an audit-log hiccup must never fail the operation it's logging) -- but a
+  // silently-swallowed failure here is invisible everywhere, including to admins reading the audit log
+  // itself, so at minimum surface it in server logs.
+  await db.insert(schema.auditLog).values({ accountId: a.accountId, workspaceId: a.workspaceId, actorId: a.actorId ?? undefined, actorType: a.actorId ? "user" : "system", action: a.action, targetType: a.targetType, targetId: a.targetId, meta: a.meta as never }).catch((e) => console.error(`[audit] failed to log "${a.action}":`, e));
 }

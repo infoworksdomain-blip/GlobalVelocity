@@ -17,7 +17,6 @@ export interface Publisher {
   publish(input: PublishInput): Promise<PublishResult>;
   metrics(accessToken: string, externalPostId: string): Promise<Metrics>;
 }
-const isMock = () => process.env.PROVIDER_MODE !== "live";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const withTags = (caption: string, tags: string[]) => `${caption}\n\n${tags.map((t) => `#${t.replace(/^#/, "")}`).join(" ")}`.trim();
 
@@ -164,8 +163,19 @@ const linkedin: Publisher = {
   async metrics() { return { views: 0, likes: 0, comments: 0 }; }, // LinkedIn member post analytics require additional partner permissions
 };
 
+// Each real platform's own credentials gate its adapter -- independent of PROVIDER_MODE, which only governs
+// the AI providers (Anthropic/ElevenLabs/fal.ai/HeyGen). Tying social publishing to that flag meant flipping
+// PROVIDER_MODE=live for AI features silently sent every social connect through real OAuth with an undefined
+// client_id/client_key, even with zero platform credentials configured -- go live provider by provider, same
+// as every other integration in this app.
+const PLATFORM_CONFIGURED: Record<Platform, () => boolean> = {
+  tiktok: () => !!process.env.TIKTOK_CLIENT_KEY,
+  instagram: () => !!process.env.META_APP_ID,
+  youtube: () => !!process.env.GOOGLE_YT_CLIENT_ID,
+  linkedin: () => !!process.env.LINKEDIN_CLIENT_ID,
+};
 export function getPublisher(platform: Platform): Publisher {
-  if (isMock()) return mock(platform);
+  if (!PLATFORM_CONFIGURED[platform]()) return mock(platform);
   return { tiktok, instagram, youtube, linkedin }[platform];
 }
 export const PLATFORMS: { id: Platform; name: string; color: string }[] = [

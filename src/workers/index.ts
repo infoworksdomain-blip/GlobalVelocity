@@ -278,6 +278,17 @@ async function cleanup() {
   await db.delete(accounts).where(and(sql`${accounts.deletedAt} is not null`, lte(accounts.deletedAt, new Date(Date.now() - 30 * 86.4e6))));
 }
 
+// ---------------- content.recover ----------------
+/** Items stuck in "generating" (worker crashed/restarted mid-job and BullMQ's own stall recovery didn't pick
+ *  it back up) permanently block the Velocity-mode swipe queue's `remaining + generating < 10` refill check
+ *  (src/app/api/v1/workspaces/[id]/blitz/route.ts) -- nothing else ever un-stuck them. Same recovery pattern
+ *  publishDispatch() already uses for posts stuck in "publishing". */
+async function recoverStuckContent() {
+  const cutoff = new Date(Date.now() - 20 * 60_000);
+  const stuck = await db.update(contentItems).set({ status: "failed", provenance: sql`${contentItems.provenance} || '{"error":"stuck in generating for over 20 minutes, recovered by cleanup sweep"}'::jsonb`, updatedAt: new Date() }).where(and(eq(contentItems.status, "generating"), lte(contentItems.updatedAt, cutoff))).returning({ id: contentItems.id, batchId: contentItems.batchId });
+  for (const item of stuck) if (item.batchId) await db.update(generationBatches).set({ failedCount: sql`${generationBatches.failedCount} + 1` }).where(eq(generationBatches.id, item.batchId));
+}
+
 // ---------------- digest.weekly (FR-15.6) ----------------
 async function digestWeekly() {
   const wss = await db.select().from(workspaces).where(isNull(workspaces.deletedAt));
@@ -337,7 +348,7 @@ async function ugcThumbnail(job: Job<{ clipId: string }>) {
 // ---------------- boot ----------------
 const handlers: Record<string, (job: Job) => Promise<void>> = {
   "profile.analyze": profileAnalyze, "generate.batch": generateBatch, "generate.item": generateItem, "publish.dispatch": publishDispatch, "publish.post": publishPost,
-  "metrics.pull": metricsPull, "tokens.refresh": tokensRefresh, "automation.run": automationRun, "automations.tick": automationsTick, "credits.allocate": creditsAllocate, "cleanup": cleanup,
+  "metrics.pull": metricsPull, "tokens.refresh": tokensRefresh, "automation.run": automationRun, "automations.tick": automationsTick, "credits.allocate": creditsAllocate, "cleanup": cleanup, "content.recover": recoverStuckContent,
   "render.item": renderItem, "digest.weekly": digestWeekly, "trends.refresh": trendsRefresh, "webhook.deliver": webhookDeliver, "affiliates.settle": affiliatesSettle,
   "ugc.thumbnail": ugcThumbnail,
 };
@@ -346,6 +357,7 @@ async function main() {
   await coreQueue.upsertJobScheduler("tokens-refresh", { every: 3_600_000 }, { name: "tokens.refresh" });
   await coreQueue.upsertJobScheduler("automations-tick", { every: 600_000 }, { name: "automations.tick" });
   await coreQueue.upsertJobScheduler("cleanup", { every: 86_400_000 }, { name: "cleanup" });
+  await coreQueue.upsertJobScheduler("content-recover", { every: 600_000 }, { name: "content.recover" });
   await coreQueue.upsertJobScheduler("trends-refresh", { every: 6 * 3_600_000 }, { name: "trends.refresh" });
   await coreQueue.upsertJobScheduler("digest-weekly", { pattern: "0 8 * * 1" }, { name: "digest.weekly" });
   await coreQueue.upsertJobScheduler("affiliates-settle", { every: 86_400_000 }, { name: "affiliates.settle" });

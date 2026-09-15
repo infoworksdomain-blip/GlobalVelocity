@@ -184,7 +184,9 @@ export async function generateImage(prompt: string, referenceUrl?: string | null
     if (!r.ok) throw new Error(`Image provider failed ${r.status}`);
     const j = await r.json() as { images?: { url: string }[]; image_url?: string };
     const url = j.images?.[0]?.url ?? j.image_url; if (!url) throw new Error("Image provider returned no image");
-    return { png: Buffer.from(await (await fetch(url)).arrayBuffer()), provider: "live" };
+    // fal.ai (and most providers behind this contract) return JPEG, not PNG -- storing those raw bytes
+    // under a .png key/content-type produced a format mismatch that rendered as a blank/black image.
+    return { png: await sharp(Buffer.from(await (await fetch(url)).arrayBuffer())).png().toBuffer(), provider: "live" };
   }
   let h = 0; for (const c of prompt) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="768" height="1024"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${h % 360},50%,40%)"/><stop offset="1" stop-color="hsl(${(h + 60) % 360},50%,20%)"/></linearGradient></defs><rect width="768" height="1024" fill="url(#g)"/><circle cx="384" cy="380" r="150" fill="#f1d3bc"/><rect x="204" y="540" width="360" height="300" rx="120" fill="#e5e7eb"/><text x="384" y="960" font-size="34" text-anchor="middle" fill="#fff" font-family="sans-serif">synthetic · ${esc(prompt.slice(0, 32))}</text></svg>`;

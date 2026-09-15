@@ -7,7 +7,7 @@ export const connection = new IORedis(process.env.REDIS_URL || "redis://localhos
  *  reason: thumbnailing thousands of uploaded clips must not starve either of them. */
 export type RenderJob = "generate.batch" | "generate.item" | "render.item";
 export type IngestJob = "ugc.thumbnail";
-export type CoreJob = "profile.analyze" | "publish.dispatch" | "publish.post" | "metrics.pull" | "tokens.refresh" | "automation.run" | "automations.tick" | "credits.allocate" | "digest.weekly" | "trends.refresh" | "webhook.deliver" | "affiliates.settle" | "cleanup";
+export type CoreJob = "profile.analyze" | "publish.dispatch" | "publish.post" | "metrics.pull" | "tokens.refresh" | "automation.run" | "automations.tick" | "credits.allocate" | "digest.weekly" | "trends.refresh" | "webhook.deliver" | "affiliates.settle" | "cleanup" | "content.recover";
 export type JobName = RenderJob | IngestJob | CoreJob;
 const RENDER: ReadonlySet<string> = new Set(["generate.batch", "generate.item", "render.item"]);
 const INGEST: ReadonlySet<string> = new Set(["ugc.thumbnail"]);
