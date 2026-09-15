@@ -132,7 +132,7 @@ export const tts: TtsProvider = async (text, voiceId) => {
 export const talkingHead: TalkingHeadProvider = async ({ script, audio, characterImageUrl, voiceId }) => {
   if (live() && process.env.VIDEO_PROVIDER_URL) {
     const r = await fetch(process.env.VIDEO_PROVIDER_URL, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${process.env.VIDEO_PROVIDER_KEY ?? ""}` }, body: JSON.stringify({ script, character_image_url: characterImageUrl, voice_id: voiceId, audio_base64: audio?.toString("base64") ?? null, aspect: "9:16" }) });
-    if (!r.ok) throw new Error(`Video provider failed ${r.status}`);
+    if (!r.ok) throw new Error(`Video provider failed ${r.status}: ${(await r.text()).slice(0, 300)}`);
     const j = await r.json() as { video_url: string; job_id?: string };
     const v = await fetch(j.video_url); return { mp4: Buffer.from(await v.arrayBuffer()), providerJobId: j.job_id };
   }
