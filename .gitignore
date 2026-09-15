@@ -12,3 +12,5 @@ playwright-report/
 *.log
 .DS_Store
 *.tsbuildinfo
+/_archive_socialblitz/
+/Project XX2.pdf
