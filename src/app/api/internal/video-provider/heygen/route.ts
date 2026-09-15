@@ -10,9 +10,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Adapter satisfying the generic TalkingHeadProvider contract (src/lib/render/index.ts) by translating
- * it into HeyGen's real, asynchronous, multi-step API: upload the reference photo, register it as a
- * talking photo, submit a video job against our own pre-rendered audio (uploaded to R2 so HeyGen can
- * fetch it by URL), then poll until the render finishes.
+ * it into HeyGen's real, asynchronous API: upload the reference photo as a talking photo, submit a
+ * video job against our own pre-rendered audio (uploaded to R2 so HeyGen can fetch it by URL), then
+ * poll until the render finishes.
  *
  * Point VIDEO_PROVIDER_URL at this route and VIDEO_PROVIDER_KEY at the HeyGen API key — the same value
  * is reused below as HeyGen's own X-Api-Key, so only one secret is needed.
@@ -43,18 +43,13 @@ export async function POST(req: Request) {
       if (!r.ok) throw new Error(`could not fetch character_image_url (${r.status})`);
       imgType = r.headers.get("content-type") || "image/jpeg"; imgBuf = Buffer.from(await r.arrayBuffer());
     }
-    const uploadRes = await fetch(`${HEYGEN_UPLOAD}/v1/asset`, { method: "POST", headers: { "x-api-key": key, "content-type": imgType }, body: new Uint8Array(imgBuf) });
-    if (!uploadRes.ok) throw new Error(`heygen asset upload failed ${uploadRes.status}: ${await uploadRes.text()}`);
-    const uploadJson = (await uploadRes.json()) as { data?: { image_key?: string } };
-    const imageKey = uploadJson.data?.image_key;
-    if (!imageKey) throw new Error(`heygen asset upload returned no image_key: ${JSON.stringify(uploadJson)}`);
-
-    // 2. Register the uploaded asset as a talking photo
-    const tpRes = await fetch(`${HEYGEN_API}/v1/talking_photo`, { method: "POST", headers: { "x-api-key": key, "content-type": "application/json" }, body: JSON.stringify({ image_key: imageKey }) });
-    if (!tpRes.ok) throw new Error(`heygen talking_photo failed ${tpRes.status}: ${await tpRes.text()}`);
+    // HeyGen's talking-photo upload endpoint creates the talking photo directly from the raw image
+    // bytes in one call -- there is no separate generic-asset-upload + registration step.
+    const tpRes = await fetch(`${HEYGEN_UPLOAD}/v1/talking_photo`, { method: "POST", headers: { "x-api-key": key, "content-type": imgType }, body: new Uint8Array(imgBuf) });
+    if (!tpRes.ok) throw new Error(`heygen talking_photo upload failed ${tpRes.status}: ${await tpRes.text()}`);
     const tpJson = (await tpRes.json()) as { data?: { talking_photo_id?: string } };
     const talkingPhotoId = tpJson.data?.talking_photo_id;
-    if (!talkingPhotoId) throw new Error(`heygen talking_photo returned no id: ${JSON.stringify(tpJson)}`);
+    if (!talkingPhotoId) throw new Error(`heygen talking_photo upload returned no id: ${JSON.stringify(tpJson)}`);
 
     // 3. Upload our TTS audio to R2 so HeyGen can fetch it by URL
     const audioBuf = Buffer.from(audio_base64, "base64");
