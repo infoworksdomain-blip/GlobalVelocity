@@ -124,6 +124,13 @@ tracked links + attribution, automation preview/run, character creation with cre
 - Set `TOKEN_ENCRYPTION_KEY`, real `AUTH_SECRET`, `STORAGE_DRIVER=s3` with a CDN in front of `S3_PUBLIC_URL`, and `ALLOW_HTTP_WEBHOOKS=0`.
 - Point an uptime monitor at `/api/health` and forward app/worker logs to your log platform (structured console output).
 
+## Documentation
+
+- **PHASES.md** — build history, verification record, known limitations and what remains (start here).
+- **DEPLOYMENT.md** — hosting: GitHub, database, host blueprints, DNS and callbacks, verification.
+- **docs/Velocity_Deployment_Integration_Runbook.pdf** — 42-page reference for every feature, endpoint, job and integration.
+- **docs/Velocity_Interactive_Prototype.html** — clickable prototype of all 41 screens.
+
 ## Deployment
 
 See **DEPLOYMENT.md** for the full guide: pushing to GitHub, provisioning managed Postgres (Neon/Supabase/Render/RDS),
