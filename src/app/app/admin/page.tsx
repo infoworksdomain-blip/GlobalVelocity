@@ -14,7 +14,7 @@ export default function Admin() {
   const [reqId, setReqId] = useState(0);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [bulkMeta, setBulkMeta] = useState({ category: "", style_tags: "", gender: "", setting: "", licence_type: "audio_replace", tier: "growth" });
-  const [bulkProgress, setBulkProgress] = useState<{ uploaded: number; total: number; batchId: string | null; completed: number; failed: number; status: string } | null>(null);
+  const [bulkProgress, setBulkProgress] = useState<{ uploaded: number; uploadFailed: number; total: number; batchId: string | null; completed: number; failed: number; status: string } | null>(null);
   // Guard against out-of-order responses when switching tabs quickly: only the latest request may set state.
   const load = (v = view, query = q) => { const id = reqId + 1; setReqId(id); setData(null); api<Record<string, unknown>>(`/admin?view=${v}${query ? `&q=${encodeURIComponent(query)}` : ""}`).then((d) => setReqId((cur) => { if (cur === id) setData(d); return cur; })).catch((e) => setReqId((cur) => { if (cur === id) setData({ error: e.message }); return cur; })); };
   useEffect(() => { if (view === "curation") setData({}); else load(view, ""); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [view]);
@@ -22,20 +22,29 @@ export default function Admin() {
   const money = (c: number) => `$${(c / 100).toFixed(2)}`;
   const runBulkUpload = () => run(async () => {
     const styleTags = bulkMeta.style_tags.split(",").map((x) => x.trim()).filter(Boolean);
-    setBulkProgress({ uploaded: 0, total: bulkFiles.length, batchId: null, completed: 0, failed: 0, status: "uploading" });
+    setBulkProgress({ uploaded: 0, uploadFailed: 0, total: bulkFiles.length, batchId: null, completed: 0, failed: 0, status: "uploading" });
     let batchId: string | null = null;
     const CHUNK = 40;
     for (let i = 0; i < bulkFiles.length; i += CHUNK) {
       const slice = bulkFiles.slice(i, i + CHUNK);
-      const { uploads } = await api<{ uploads: { key: string; upload_url: string }[] }>("/admin/ugc-clips/batch-presign", { method: "POST", json: { files: slice.map((f) => ({ filename: f.name, content_type: f.type || "video/mp4" })) } });
-      for (let j = 0; j < slice.length; j++) {
-        await fetch(uploads[j].upload_url, { method: "PUT", body: slice[j], headers: { "content-type": slice[j].type || "video/mp4" } });
-        setBulkProgress((p) => p && { ...p, uploaded: p.uploaded + 1 });
-      }
-      const regResult: { batch_id: string; registered: number } = await api("/admin/ugc-clips/batch-register", { method: "POST", json: { batch_id: batchId ?? undefined, clips: uploads.map((u) => ({ storage_key: u.key, category: bulkMeta.category || undefined, style_tags: styleTags, gender: bulkMeta.gender || undefined, setting: bulkMeta.setting || undefined, licence_type: bulkMeta.licence_type, tier: bulkMeta.tier })) } });
-      batchId = regResult.batch_id;
+      // A presign or register call failing shouldn't lose earlier chunks: only this slice is skipped, not the whole run.
+      try {
+        const { uploads } = await api<{ uploads: { key: string; upload_url: string }[] }>("/admin/ugc-clips/batch-presign", { method: "POST", json: { files: slice.map((f) => ({ filename: f.name, content_type: f.type || "video/mp4" })) } });
+        const okKeys: string[] = [];
+        for (let j = 0; j < slice.length; j++) {
+          try {
+            const r = await fetch(uploads[j].upload_url, { method: "PUT", body: slice[j], headers: { "content-type": slice[j].type || "video/mp4" } });
+            if (r.ok) { okKeys.push(uploads[j].key); setBulkProgress((p) => p && { ...p, uploaded: p.uploaded + 1 }); }
+            else setBulkProgress((p) => p && { ...p, uploadFailed: p.uploadFailed + 1 });
+          } catch { setBulkProgress((p) => p && { ...p, uploadFailed: p.uploadFailed + 1 }); }
+        }
+        if (okKeys.length) {
+          const regResult: { batch_id: string; registered: number } = await api("/admin/ugc-clips/batch-register", { method: "POST", json: { batch_id: batchId ?? undefined, clips: okKeys.map((key) => ({ storage_key: key, category: bulkMeta.category || undefined, style_tags: styleTags, gender: bulkMeta.gender || undefined, setting: bulkMeta.setting || undefined, licence_type: bulkMeta.licence_type, tier: bulkMeta.tier })) } });
+          batchId = regResult.batch_id;
+        }
+      } catch { setBulkProgress((p) => p && { ...p, uploadFailed: p.uploadFailed + slice.length }); }
     }
-    setBulkProgress((p) => p && { ...p, batchId, status: "processing" });
+    setBulkProgress((p) => p && { ...p, batchId, status: batchId ? "processing" : "done" });
     const poll = async () => {
       if (!batchId) return;
       const { batch } = await api<{ batch: { completedCount: number; failedCount: number; requestedCount: number; status: string } }>(`/admin/ugc-clip-batches/${batchId}`);
@@ -126,9 +135,10 @@ export default function Admin() {
               <p className="text-xs text-slate-400">This metadata applies to the whole selection. Upload files with different categories/tags in separate batches.</p>
               <button className="btn-primary" disabled={!bulkFiles.length} onClick={runBulkUpload}>Upload {bulkFiles.length || ""} clips</button>
               {bulkProgress && <div className="rounded-xl bg-slate-50 p-3 text-xs space-y-1">
-                <div className="flex justify-between"><span>Uploading</span><b>{bulkProgress.uploaded} / {bulkProgress.total}</b></div>
-                <div className="h-1.5 rounded-full bg-slate-200"><div className="h-1.5 rounded-full bg-brand-600" style={{ width: `${bulkProgress.total ? (100 * bulkProgress.uploaded) / bulkProgress.total : 0}%` }} /></div>
-                {bulkProgress.batchId && <div className="flex justify-between pt-1"><span>Processing (thumbnails/duration)</span><b>{bulkProgress.completed + bulkProgress.failed} / {bulkProgress.total} — {bulkProgress.status}</b></div>}
+                <div className="flex justify-between"><span>Uploading</span><b>{bulkProgress.uploaded + bulkProgress.uploadFailed} / {bulkProgress.total}</b></div>
+                <div className="h-1.5 rounded-full bg-slate-200"><div className="h-1.5 rounded-full bg-brand-600" style={{ width: `${bulkProgress.total ? (100 * (bulkProgress.uploaded + bulkProgress.uploadFailed)) / bulkProgress.total : 0}%` }} /></div>
+                {bulkProgress.uploadFailed > 0 && <div className="text-red-600">{bulkProgress.uploadFailed} files failed to upload and were skipped (not registered)</div>}
+                {bulkProgress.batchId && <div className="flex justify-between pt-1"><span>Processing (thumbnails/duration)</span><b>{bulkProgress.completed + bulkProgress.failed} / {bulkProgress.uploaded} — {bulkProgress.status}</b></div>}
                 {bulkProgress.failed > 0 && <div className="text-red-600">{bulkProgress.failed} failed to process</div>}
               </div>}
             </div>

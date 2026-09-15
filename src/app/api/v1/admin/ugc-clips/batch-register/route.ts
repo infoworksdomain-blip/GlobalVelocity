@@ -9,8 +9,10 @@ import { z } from "zod";
  * synchronous ffmpeg here, unlike the single-clip admin route) and enqueue async thumbnailing per clip.
  * Admin only.
  */
+// Must be a key this route's own batch-presign step could have issued -- keeps a compromised/careless admin
+// session from pointing a "public" ugc_clips row at an arbitrary key elsewhere in the shared bucket.
 const clipSchema = z.object({
-  storage_key: z.string(), category: z.string().max(60).optional(), style_tags: z.array(z.string()).default([]),
+  storage_key: z.string().regex(/^library\/ugc\/[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,10}$/), category: z.string().max(60).optional(), style_tags: z.array(z.string()).default([]),
   creator_name: z.string().max(80).optional(), gender: z.string().max(20).optional(), setting: z.string().max(40).optional(),
   has_speech: z.boolean().default(false), transcript: z.string().optional(),
   licence_type: z.enum(["audio_replace", "subtitle_only"]), territories: z.array(z.string()).default(["worldwide"]),

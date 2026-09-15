@@ -45,12 +45,13 @@ async function overlayBeatsOnVideo(video: Buffer, beats: { text: string; seconds
 /** Transparent PNG with a caption pill for overlaying on video. */
 async function captionOverlay(line: string, brand: R.Brand, style?: OverlayStyle | null) {
   const s = R.resolveOverlayStyle(style);
-  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const scale = s.fontSizePx / 88; // pill/line-height must scale with font size or larger sizes overflow the pill and smaller sizes leave it oversized
   const words = line.split(/\s+/); const lines: string[] = []; let cur = ""; for (const w of words) { if ((cur + " " + w).trim().length > 20) { lines.push(cur); cur = w; } else cur = (cur + " " + w).trim(); } if (cur) lines.push(cur);
-  const boxHeight = lines.length * 112 + 120;
+  const lineH = 112 * scale, padding = 120 * scale;
+  const boxHeight = lines.length * lineH + padding;
   const centerY = s.position === "top" ? 60 + boxHeight / 2 : s.position === "bottom" ? R.H - 60 - boxHeight / 2 : R.H / 2;
-  const y0 = centerY - (lines.length - 1) * 56;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${R.W}" height="${R.H}"><rect x="60" y="${centerY - boxHeight / 2}" width="${R.W - 120}" height="${boxHeight}" rx="36" fill="${brand.secondary}" fill-opacity="0.75"/>${lines.map((l, i) => `<text x="${R.W / 2}" y="${y0 + 20 + i * 112 * (s.fontSizePx / 88)}" font-family="${esc(s.fontFamily)}" font-size="${s.fontSizePx}" font-weight="${s.weight}" fill="${s.color}" text-anchor="middle">${esc(l)}</text>`).join("")}</svg>`;
+  const y0 = centerY - (lines.length - 1) * (lineH / 2);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${R.W}" height="${R.H}"><rect x="60" y="${centerY - boxHeight / 2}" width="${R.W - 120}" height="${boxHeight}" rx="36" fill="${R.esc(brand.secondary)}" fill-opacity="0.75"/>${lines.map((l, i) => `<text x="${R.W / 2}" y="${y0 + 20 * scale + i * lineH}" font-family="${R.esc(s.fontFamily)}" font-size="${s.fontSizePx}" font-weight="${s.weight}" fill="${R.esc(s.color)}" text-anchor="middle">${R.esc(l)}</text>`).join("")}</svg>`;
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 

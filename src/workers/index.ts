@@ -320,8 +320,11 @@ async function ugcThumbnail(job: Job<{ clipId: string }>) {
     await db.update(ugcClips).set({ status: "published", durationMs, thumbnailKey: thumbKey }).where(eq(ugcClips.id, clip.id));
     if (clip.ingestBatchId) await db.update(ugcClipBatches).set({ completedCount: sql`${ugcClipBatches.completedCount} + 1` }).where(eq(ugcClipBatches.id, clip.ingestBatchId));
   } catch (e) {
-    await db.update(ugcClips).set({ status: "failed" }).where(eq(ugcClips.id, clip.id));
-    if (clip.ingestBatchId) await db.update(ugcClipBatches).set({ failedCount: sql`${ugcClipBatches.failedCount} + 1` }).where(eq(ugcClipBatches.id, clip.ingestBatchId));
+    const terminal = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+    if (terminal) {
+      await db.update(ugcClips).set({ status: "failed" }).where(eq(ugcClips.id, clip.id));
+      if (clip.ingestBatchId) await db.update(ugcClipBatches).set({ failedCount: sql`${ugcClipBatches.failedCount} + 1` }).where(eq(ugcClipBatches.id, clip.ingestBatchId));
+    }
     throw e;
   } finally {
     if (clip.ingestBatchId) {

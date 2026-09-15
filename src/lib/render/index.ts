@@ -11,7 +11,8 @@ import type { OverlayStyle } from "@/db/schema";
 const exec = promisify(execFile);
 export const W = 1080, H = 1920;
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+/** Full SVG-safe escape -- required for any value placed inside a quoted attribute, not just element content. */
+export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 /** Greedy word-wrap for SVG text. */
 function wrap(text: string, maxChars: number) {
   const words = text.split(/\s+/); const lines: string[] = []; let cur = "";
@@ -74,13 +75,15 @@ const overlayY0 = (position: ResolvedOverlayStyle["position"], boxHeight: number
 /** Caption card used for hook+demo videos and as the visual bed under UGC audio when no talking-head provider is configured. */
 export async function renderCaptionFrame(line: string, brand: Brand, sub?: string, bg?: Buffer | null, style?: OverlayStyle | null): Promise<Buffer> {
   const s = resolveOverlayStyle(style);
+  const scale = s.fontSizePx / 88; // pill must scale with font size, same reasoning as captionOverlay() in pipeline.ts
   const ls = wrap(line, 20);
-  const boxHeight = ls.length * 112 + 120;
+  const lineH = 112 * scale, padding = 120 * scale;
+  const boxHeight = ls.length * lineH + padding;
   const centerY = overlayY0(s.position, boxHeight);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-    <rect width="${W}" height="${H}" fill="${bg ? "#00000066" : brand.secondary}"/>
+    <rect width="${W}" height="${H}" fill="${bg ? "#00000066" : esc(brand.secondary)}"/>
     <rect x="60" y="${centerY - boxHeight / 2}" width="${W - 120}" height="${boxHeight}" rx="36" fill="#000000aa"/>
-    ${textBlock(ls, W / 2, centerY + 20 - (ls.length - 1) * 56, s.fontSizePx, { lineHeight: s.fontSizePx * (112 / 88), fill: s.color, weight: s.weight, fontFamily: s.fontFamily })}
+    ${textBlock(ls, W / 2, centerY + 20 * scale - (ls.length - 1) * (lineH / 2), s.fontSizePx, { lineHeight: lineH, fill: s.color, weight: s.weight, fontFamily: s.fontFamily })}
     ${sub ? `<text x="${W / 2}" y="${H - 220}" font-family="DejaVu Sans, Arial" font-size="42" fill="#ffffffcc" text-anchor="middle">${esc(sub)}</text>` : ""}
   </svg>`;
   if (bg) return sharp(await sharp(bg).resize(W, H, { fit: "cover" }).png().toBuffer()).composite([{ input: Buffer.from(svg) }]).png().toBuffer();
