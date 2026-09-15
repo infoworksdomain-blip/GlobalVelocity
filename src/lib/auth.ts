@@ -6,16 +6,20 @@ import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db, schema } from "@/db";
 import { ensureAccountForUser } from "@/lib/tenancy";
 
-// Magic link: with RESEND_API_KEY set, emails go via Resend SMTP; without it, the link is logged (dev).
+// Magic link: with RESEND_API_KEY set, emails go via the Resend HTTP API (not SMTP -- outbound SMTP is
+// blocked/throttled on some PaaS hosts); without it, the link is logged (dev).
 const providers = [
   Nodemailer({
     from: process.env.EMAIL_FROM || "login@example.com",
-    server: process.env.RESEND_API_KEY ? { host: "smtp.resend.com", port: 465, auth: { user: "resend", pass: process.env.RESEND_API_KEY } } : { jsonTransport: true },
+    server: { jsonTransport: true },
     async sendVerificationRequest({ identifier, url, provider }) {
       if (!process.env.RESEND_API_KEY) { console.log(`\n[magic-link] ${identifier} -> ${url}\n`); return; }
-      const nodemailer = await import("nodemailer");
-      const t = nodemailer.createTransport(provider.server as never);
-      await t.sendMail({ to: identifier, from: provider.from, subject: `Sign in to ${process.env.APP_NAME ?? "Velocity"}`, text: `Sign in: ${url}`, html: `<p><a href="${url}">Click here to sign in</a></p>` });
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
+        body: JSON.stringify({ to: identifier, from: provider.from, subject: `Sign in to ${process.env.APP_NAME ?? "Velocity"}`, text: `Sign in: ${url}`, html: `<p><a href="${url}">Click here to sign in</a></p>` }),
+      });
+      if (!r.ok) throw new Error(`Resend send failed ${r.status}: ${await r.text()}`);
     },
   }),
   ...(process.env.AUTH_GOOGLE_ID ? [Google] : []),
