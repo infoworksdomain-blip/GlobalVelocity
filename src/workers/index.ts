@@ -9,7 +9,7 @@ import { db, schema } from "@/db";
 import { and, eq, lte, sql, desc, inArray, gte, isNull } from "drizzle-orm";
 import { crawlSite } from "@/lib/crawler";
 import { analyzeProfile, profileEmbedding, generateAngles, generateCopy, predictedScore } from "@/lib/generation";
-import { moderateText } from "@/lib/llm";
+import { moderateText, currentModelLabel } from "@/lib/llm";
 import { publicUrl } from "@/lib/storage";
 import { getPublisher } from "@/lib/publishers";
 import { decrypt, encrypt } from "@/lib/crypto";
@@ -124,7 +124,7 @@ async function generateItem(job: Job<{ itemId: string; angle: { type: string; an
     await db.update(contentItems).set({
       status: "candidate", hook: copy.hook, script: copy.script, onScreenText: copy.on_screen_text, caption: copy.caption, hashtags: copy.hashtags, media, moderation: mod,
       predictedScore: String(predictedScore(item.format, trend ? Number(trend.velocityScore ?? 0) : null, 0.5)),
-      provenance: { ...item.provenance, prompt_template: "v1", llm: process.env.PROVIDER_MODE === "live" ? process.env.ANTHROPIC_MODEL : "mock", credits_consumed: creditsUsed, trend_id: item.trendId, character_id: item.characterId, slides: copy.slides, meme: copy.meme_top ? { top: copy.meme_top, bottom: copy.meme_bottom } : undefined }, updatedAt: new Date(),
+      provenance: { ...item.provenance, prompt_template: "v1", llm: currentModelLabel(), credits_consumed: creditsUsed, trend_id: item.trendId, character_id: item.characterId, slides: copy.slides, meme: copy.meme_top ? { top: copy.meme_top, bottom: copy.meme_bottom } : undefined }, updatedAt: new Date(),
     }).where(eq(contentItems.id, item.id));
     if (item.batchId) {
       const [b] = await db.update(generationBatches).set({ completedCount: sql`${generationBatches.completedCount} + 1` }).where(eq(generationBatches.id, item.batchId)).returning();

@@ -1,20 +1,45 @@
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { z } from "zod";
 
-/** Provider-abstracted LLM helper. PROVIDER_MODE=mock (or no key) returns deterministic fixtures so the whole loop runs offline. */
-export const isMock = () => process.env.PROVIDER_MODE !== "live" || !process.env.ANTHROPIC_API_KEY;
+/** Provider-abstracted LLM helper. PROVIDER_MODE=mock (or no key for the selected provider) returns deterministic fixtures so the whole loop runs offline. */
+const llmProvider = () => (process.env.LLM_PROVIDER === "openai" ? "openai" : "anthropic");
+export const isMock = () =>
+  process.env.PROVIDER_MODE !== "live" ||
+  (llmProvider() === "anthropic" ? !process.env.ANTHROPIC_API_KEY : !process.env.OPENAI_API_KEY);
 
-let client: Anthropic | null = null;
-const anthropic = () => (client ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
+let anthropicClient: Anthropic | null = null;
+const anthropic = () => (anthropicClient ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
+let openaiClient: OpenAI | null = null;
+const openai = () => (openaiClient ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+
+const JSON_ONLY_SUFFIX = "\nRespond with a single JSON object only. No prose, no markdown fences.";
+
+async function completeAnthropicText(system: string, user: string, maxTokens: number): Promise<string> {
+  const res = await anthropic().messages.create({
+    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5", max_tokens: maxTokens,
+    system: system + JSON_ONLY_SUFFIX,
+    messages: [{ role: "user", content: user }],
+  });
+  return res.content.filter((c) => c.type === "text").map((c) => (c as { text: string }).text).join("");
+}
+
+async function completeOpenAIText(system: string, user: string, maxTokens: number): Promise<string> {
+  const res = await openai().responses.create({
+    model: process.env.OPENAI_MODEL || "gpt-5", max_output_tokens: maxTokens,
+    instructions: system + JSON_ONLY_SUFFIX,
+    input: user,
+    text: { format: { type: "json_object" } },
+  });
+  return res.output_text;
+}
+
+/** Model label for provenance stamping -- "mock" unless actually running live. */
+export const currentModelLabel = () => (isMock() ? "mock" : llmProvider() === "openai" ? process.env.OPENAI_MODEL || "gpt-5" : process.env.ANTHROPIC_MODEL || "claude-sonnet-5");
 
 export async function completeJson<S extends z.ZodTypeAny>(system: string, user: string, schema: S, mock: () => z.input<S>, maxTokens = 4000): Promise<z.output<S>> {
   if (isMock()) return schema.parse(mock());
-  const res = await anthropic().messages.create({
-    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5", max_tokens: maxTokens,
-    system: system + "\nRespond with a single JSON object only. No prose, no markdown fences.",
-    messages: [{ role: "user", content: user }],
-  });
-  const text = res.content.filter((c) => c.type === "text").map((c) => (c as { text: string }).text).join("");
+  const text = llmProvider() === "openai" ? await completeOpenAIText(system, user, maxTokens) : await completeAnthropicText(system, user, maxTokens);
   const clean = text.replace(/```json|```/g, "").trim();
   const start = clean.indexOf("{"); const end = clean.lastIndexOf("}");
   return schema.parse(JSON.parse(clean.slice(start, end + 1)));

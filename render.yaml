@@ -51,6 +51,22 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: LLM_PROVIDER
+        value: anthropic      # anthropic | openai
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: IMAGE_PROVIDER_URL
+        sync: false           # e.g. https://fal.run/fal-ai/flux-pro
+      - key: IMAGE_PROVIDER_KEY
+        sync: false           # fal.ai key ("Key <id>:<secret>")
+      - key: VIDEO_PROVIDER_URL
+        sync: false           # e.g. https://<your-app>.onrender.com/api/internal/video-provider/falai
+      - key: VIDEO_PROVIDER_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: FIRECRAWL_API_KEY
+        sync: false
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
