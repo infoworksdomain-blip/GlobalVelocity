@@ -100,7 +100,9 @@ export async function inpaint(buf: Buffer, maskBuf: Buffer): Promise<Buffer> {
     const meta = await sharp(buf).metadata();
     const resizedMask = await sharp(maskBuf).resize(meta.width, meta.height, { fit: "fill" }).toBuffer();
     const [srcUrl, maskUrl] = await Promise.all([stageForFal(buf), stageForFal(resizedMask)]);
-    const j = await falQueueSubmitPollFetch(FAL_INPAINT_MODEL, { image_url: srcUrl, mask_url: maskUrl });
+    // fal-ai/lama's actual queue-API contract wants `mask_image_url`, not `mask_url` -- verified live
+    // (the model's own 422 response body names the missing field).
+    const j = await falQueueSubmitPollFetch(FAL_INPAINT_MODEL, { image_url: srcUrl, mask_image_url: maskUrl });
     if (!j.image?.url) throw new Error("fal.ai inpaint returned no image");
     return sharp(Buffer.from(await (await fetch(j.image.url)).arrayBuffer())).png().toBuffer();
   }
