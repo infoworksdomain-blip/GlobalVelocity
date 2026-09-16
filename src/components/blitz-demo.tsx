@@ -22,7 +22,7 @@ export function BlitzDemo() {
           <button onClick={() => swipe("r")} className="h-14 w-14 rounded-full bg-white text-brand-700 text-2xl font-bold hover:scale-105 transition">♥</button>
         </div>
       </div>
-      <div className="absolute -bottom-8 left-0 right-0 text-center text-xs text-slate-500">Try it: swipe right to keep · {kept} kept</div>
+      <div className="absolute -bottom-8 left-0 right-0 text-center text-xs" style={{ color: "var(--color-faint)" }}>Try it: swipe right to keep · {kept} kept</div>
     </div>
   );
 }
