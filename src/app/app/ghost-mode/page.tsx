@@ -17,6 +17,16 @@ type Preview = { slots: number; will_generate: number; library_clips_available: 
 
 const DEFAULT_CADENCE = { posts_per_day: 1, horizon_days: 14, times: ["09:00", "18:00"], weekdays: [1, 2, 3, 4, 5] };
 
+/** Only ever rendered when Convex is actually configured (see the useConvex guard at the call site) --
+ * useQuery() requires a ConvexProvider ancestor to exist regardless of its query args, so this hook must
+ * never execute when GhostModeConvexProvider didn't mount a real provider. Renders nothing itself; just
+ * forwards live progress to the parent. */
+function ConvexJobProgress({ jobId, onUpdate }: { jobId: string; onUpdate: (p: { status: string; step: string; pct: number; error?: string | null; nicheMatch?: unknown }) => void }) {
+  const progress = useConvexQuery(convexApi.ghostMode.getByJobId, { jobId });
+  useEffect(() => { if (progress) onUpdate(progress); }, [progress, onUpdate]);
+  return null;
+}
+
 /** GhostMode (M-GM): scan a business's website, match it to the UGC library's niche taxonomy, then
  * autoschedule + autopublish from that niche (or AI-generate instead). Reuses the existing profile-scan,
  * UGC library, and automations engine wholesale -- this page is the guided setup wizard over them. */
@@ -52,18 +62,20 @@ export default function GhostMode() {
   }, [workspaceId]);
 
   // Live scan progress: Convex if configured (no poll delay), else the same polling pattern as
-  // /app/onboarding. Strictly opt-in -- the wizard works identically either way.
+  // /app/onboarding. Strictly opt-in -- the wizard works identically either way. useQuery() itself
+  // requires a ConvexProvider ancestor to exist at all (independent of whether the query arg is
+  // "skip"), and GhostModeConvexProvider only mounts a real provider when a URL is configured -- so
+  // the hook must live in a component that's only ever RENDERED when Convex is actually set up,
+  // never called unconditionally from this component.
   const useConvex = !!process.env.NEXT_PUBLIC_CONVEX_URL;
-  const convexProgress = useConvexQuery(convexApi.ghostMode.getByJobId, useConvex && job && !["done", "failed"].includes(job.status) ? { jobId: job.id } : "skip");
-  useEffect(() => {
-    if (!convexProgress || !job) return;
-    setJob({ id: job.id, status: convexProgress.status, progress: { step: convexProgress.step, pct: convexProgress.pct }, error: convexProgress.error ?? null, result: convexProgress.nicheMatch ? { profileId: "", niche_match: convexProgress.nicheMatch as NicheMatch } : job.result });
-  }, [convexProgress, job]);
   useEffect(() => {
     if (useConvex || !job || ["done", "failed"].includes(job.status)) return;
     const t = setTimeout(() => api<{ job: Job }>(`/jobs/${job.id}`).then((r) => setJob(r.job)), 1500);
     return () => clearTimeout(t);
   }, [job, useConvex]);
+  const onConvexProgress = useCallback((p: { status: string; step: string; pct: number; error?: string | null; nicheMatch?: unknown }) => {
+    setJob((prev) => prev && { id: prev.id, status: p.status, progress: { step: p.step, pct: p.pct }, error: p.error ?? null, result: p.nicheMatch ? { profileId: "", niche_match: p.nicheMatch as NicheMatch } : prev.result });
+  }, []);
   const selectNiche = useCallback((category: string) => {
     setCategories(category ? [category] : []);
     if (category) api<{ clips: Clip[] }>(`/ugc-clips?category=${encodeURIComponent(category)}`).then((r) => setSample(r.clips.slice(0, 8)));
@@ -111,6 +123,7 @@ export default function GhostMode() {
 
   return (
     <div className="mx-auto max-w-2xl py-12">{wall}
+      {useConvex && job && !["done", "failed"].includes(job.status) && <ConvexJobProgress jobId={job.id} onUpdate={onConvexProgress} />}
       <h1 className="text-2xl font-extrabold">Ghost Mode</h1>
       <p className="mt-2 text-[var(--color-muted)]">Scan your website, match your niche to the video library, and let Ghost Mode post for you on autopilot.</p>
 

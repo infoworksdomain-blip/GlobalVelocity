@@ -4,6 +4,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time, not read at runtime -- Render
+# auto-passes a service's configured env vars as Docker build args, but only for vars explicitly
+# declared here (this is a public, non-secret deployment URL, safe to pass as a build arg).
+ARG NEXT_PUBLIC_CONVEX_URL
+ENV NEXT_PUBLIC_CONVEX_URL=$NEXT_PUBLIC_CONVEX_URL
 RUN npm run build
 RUN useradd -m app && chown -R app /app
 USER app
