@@ -26,10 +26,10 @@ export default function Studio() {
     <div className="grid gap-6 md:grid-cols-2">
       <div className="card p-6 space-y-4">
         <h2 className="text-xl font-bold">Generate a targeted batch</h2>
-        <div><div className="label">Formats</div><div className="flex flex-wrap gap-2">{Object.entries(FORMAT_LABEL).filter(([k]) => k !== "upload").map(([k, v]) => <button key={k} onClick={() => setFormats(formats.includes(k) ? formats.filter((f) => f !== k) : [...formats, k])} className={`badge px-3 py-1.5 ${formats.includes(k) ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-700"}`}>{v}</button>)}</div></div>
+        <div><div className="label">Formats</div><div className="flex flex-wrap gap-2">{Object.entries(FORMAT_LABEL).filter(([k]) => k !== "upload").map(([k, v]) => <button key={k} onClick={() => setFormats(formats.includes(k) ? formats.filter((f) => f !== k) : [...formats, k])} className={`badge px-3 py-1.5 ${formats.includes(k) ? "bg-brand-600 text-white" : "bg-[var(--color-surface-2)] text-[var(--color-text)]"}`}>{v}</button>)}</div></div>
         <div className="grid grid-cols-2 gap-3"><div><label className="label">Count</label><input type="number" className="input" min={1} max={100} value={count} onChange={(e) => setCount(Number(e.target.value))} /></div><div><label className="label">Character (AI UGC)</label><select className="input" value={charId} onChange={(e) => setCharId(e.target.value)}><option value="">Auto</option>{chars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div></div>
         <div><label className="label">Language {me?.plan.limits.multiLanguage ? "" : "(Pro)"}</label><input className="input" placeholder="en" value={lang} onChange={(e) => setLang(e.target.value)} disabled={!me?.plan.limits.multiLanguage} /></div>
-        <p className="text-xs text-slate-500">Daily candidate limit: {me?.plan.limits.candidatesPerDay}. Batches land in Velocity mode for approval.</p>
+        <p className="text-xs text-[var(--color-muted)]">Daily candidate limit: {me?.plan.limits.candidatesPerDay}. Batches land in Velocity mode for approval.</p>
         <button className="btn-primary" disabled={busy || formats.length === 0} onClick={generate}>{busy ? <Spinner /> : "Generate"}</button>
       </div>
       <div className="space-y-6">
@@ -40,11 +40,11 @@ export default function Studio() {
           {purpose === "content" && <><input className="input" placeholder="Hook / title" value={hook} onChange={(e) => setHook(e.target.value)} /><textarea className="input" rows={2} placeholder="Caption" value={caption} onChange={(e) => setCaption(e.target.value)} /></>}
           <input type="file" accept="video/mp4,video/quicktime,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <button className="btn-secondary" disabled={!file || busy} onClick={upload}>{progress ?? "Upload"}</button>
-          <p className="text-xs text-slate-500">Brand screenshots are used as the visual bed in generated slideshows and hook + demo videos.</p>
+          <p className="text-xs text-[var(--color-muted)]">Brand screenshots are used as the visual bed in generated slideshows and hook + demo videos.</p>
         </div>
         <div className="card p-6 space-y-3">
           <div className="flex items-center justify-between"><h2 className="text-xl font-bold">AI Studio</h2><Badge>{me?.usage.credits} credits</Badge></div>
-          <p className="text-sm text-slate-600">Image and video generation on credits (4 per image, 10 per second of video). Live generation requires an image/video provider key; in mock mode the estimate below still works.</p>
+          <p className="text-sm text-[var(--color-muted)]">Image and video generation on credits (4 per image, 10 per second of video). Live generation requires an image/video provider key; in mock mode the estimate below still works.</p>
           <div className="grid grid-cols-2 gap-3"><div><label className="label">Images</label><input type="number" className="input" min={0} value={imgs} onChange={(e) => setImgs(Number(e.target.value))} /></div><div><label className="label">Video seconds</label><input type="number" className="input" min={0} value={secs} onChange={(e) => setSecs(Number(e.target.value))} /></div></div>
           <p className="text-sm">Estimated cost: <b>{est ?? "…"} credits</b></p>
           <textarea className="input" rows={2} placeholder="Image prompt (e.g. product on a desk, morning light, phone photo)" value={prompt} onChange={(e) => setPrompt(e.target.value)} />

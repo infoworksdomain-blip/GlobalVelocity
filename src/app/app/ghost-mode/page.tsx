@@ -102,8 +102,8 @@ export default function GhostMode() {
     return (
       <div className="mx-auto max-w-xl py-12">{wall}
         <div className="flex items-center gap-2"><h1 className="text-2xl font-extrabold">Ghost Mode</h1><Badge tone="brand">{existing.status}</Badge></div>
-        <p className="mt-2 text-slate-600">Running on autopilot: {existing.config.posts_per_day}/day across {existing.config.social_account_ids.length} account(s). Last run {existing.lastRunAt ? new Date(existing.lastRunAt).toLocaleString() : "not yet"}.</p>
-        {existingPreview && <p className="mt-2 text-sm text-slate-500">{existingPreview.slots} posts scheduled this cycle{existingPreview.library_clips_available !== null ? ` · ${existingPreview.library_clips_available} matching clips in the library` : ""}.</p>}
+        <p className="mt-2 text-[var(--color-muted)]">Running on autopilot: {existing.config.posts_per_day}/day across {existing.config.social_account_ids.length} account(s). Last run {existing.lastRunAt ? new Date(existing.lastRunAt).toLocaleString() : "not yet"}.</p>
+        {existingPreview && <p className="mt-2 text-sm text-[var(--color-muted)]">{existingPreview.slots} posts scheduled this cycle{existingPreview.library_clips_available !== null ? ` · ${existingPreview.library_clips_available} matching clips in the library` : ""}.</p>}
         <div className="mt-6 flex gap-2"><a className="btn-secondary" href="/app/calendar">Open Calendar</a><a className="btn-secondary" href="/app/automations">Manage in Automations</a></div>
       </div>
     );
@@ -112,7 +112,7 @@ export default function GhostMode() {
   return (
     <div className="mx-auto max-w-2xl py-12">{wall}
       <h1 className="text-2xl font-extrabold">Ghost Mode</h1>
-      <p className="mt-2 text-slate-600">Scan your website, match your niche to the video library, and let Ghost Mode post for you on autopilot.</p>
+      <p className="mt-2 text-[var(--color-muted)]">Scan your website, match your niche to the video library, and let Ghost Mode post for you on autopilot.</p>
 
       {step === "scan" && (
         !job ? (
@@ -120,8 +120,8 @@ export default function GhostMode() {
         ) : (
           <div className="card mt-8 p-6">
             <div className="flex items-center gap-3">{job.status !== "failed" && job.status !== "done" && <Spinner />}<div className="font-semibold">{job.status === "failed" ? "Scan failed" : job.progress.step}</div></div>
-            <div className="mt-3 h-2 rounded bg-slate-100"><div className="h-2 rounded bg-brand-600 transition-all" style={{ width: `${job.status === "done" ? 100 : job.progress.pct}%` }} /></div>
-            {job.status === "failed" && <div className="mt-3 text-sm text-red-600">{job.error ?? "Try another URL."}<button className="btn-secondary mt-3" onClick={() => setJob(null)}>Try again</button></div>}
+            <div className="mt-3 h-2 rounded bg-[var(--color-surface-2)]"><div className="h-2 rounded bg-brand-600 transition-all" style={{ width: `${job.status === "done" ? 100 : job.progress.pct}%` }} /></div>
+            {job.status === "failed" && <div className="mt-3 text-sm text-[var(--color-danger)]">{job.error ?? "Try another URL."}<button className="btn-secondary mt-3" onClick={() => setJob(null)}>Try again</button></div>}
           </div>
         )
       )}
@@ -138,12 +138,12 @@ export default function GhostMode() {
                     <option value="">Select a niche…</option>
                     {availableCategories.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
-                ) : <p className="text-xs text-slate-400 py-2.5">No niches in the library yet — switch to AI-generate.</p>}
+                ) : <p className="text-xs text-[var(--color-faint)] py-2.5">No niches in the library yet — switch to AI-generate.</p>}
               </div>
               <div><label className="label">Style tags</label><input className="input" value={styleTags.join(",")} onChange={(e) => setStyleTags(e.target.value.split(",").map((x) => x.trim()).filter(Boolean))} /></div>
             </div>
             {sample.length > 0 && <div><label className="label">Sample clips</label><div className="grid grid-cols-4 gap-2">{sample.map((c) => c.thumbnailUrl && <img key={c.id} src={c.thumbnailUrl} className="rounded-lg aspect-[9/16] object-cover" alt="" />)}</div></div>}
-            {sample.length === 0 && categories.length > 0 && <p className="text-xs text-slate-400">No sample clips found for this niche yet — you can still continue, or switch to AI-generate.</p>}
+            {sample.length === 0 && categories.length > 0 && <p className="text-xs text-[var(--color-faint)]">No sample clips found for this niche yet — you can still continue, or switch to AI-generate.</p>}
           </>}
           <div className="flex justify-end"><button className="btn-primary" onClick={() => setStep("cadence")}>Continue</button></div>
         </div>
@@ -160,7 +160,7 @@ export default function GhostMode() {
       {step === "accounts" && (
         <div className="mt-8 space-y-4 text-sm">
           <label className="label">Accounts to post to</label>
-          <div className="flex flex-wrap gap-2">{socials.map((s) => <button key={s.id} onClick={() => toggle(accountIds, setAccountIds, s.id)} className={`badge px-3 py-1.5 ${accountIds.includes(s.id) ? "bg-brand-600 text-white" : "bg-slate-100"}`}>{PLATFORM_LABEL[s.platform]} @{s.handle}</button>)}{socials.length === 0 && <span className="text-slate-500">Connect a social account first in Settings.</span>}</div>
+          <div className="flex flex-wrap gap-2">{socials.map((s) => <button key={s.id} onClick={() => toggle(accountIds, setAccountIds, s.id)} className={`badge px-3 py-1.5 ${accountIds.includes(s.id) ? "bg-brand-600 text-white" : "bg-[var(--color-surface-2)]"}`}>{PLATFORM_LABEL[s.platform]} @{s.handle}</button>)}{socials.length === 0 && <span className="text-[var(--color-muted)]">Connect a social account first in Settings.</span>}</div>
           <div className="flex justify-between"><button className="btn-ghost" onClick={() => setStep("cadence")}>Back</button><button className="btn-primary" disabled={accountIds.length === 0} onClick={() => setStep("confirm")}>Continue</button></div>
         </div>
       )}

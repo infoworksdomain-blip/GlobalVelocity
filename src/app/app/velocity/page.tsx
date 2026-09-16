@@ -38,11 +38,11 @@ export default function Blitz() {
   return (
     <div className="mx-auto max-w-5xl">{wall}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-extrabold">Velocity mode</h1><p className="text-sm text-slate-500">→ or K to keep · ← or S to skip · Z undo · E edit · C schedule</p></div>
+        <div><h1 className="text-2xl font-extrabold">Velocity mode</h1><p className="text-sm text-[var(--color-muted)]">→ or K to keep · ← or S to skip · Z undo · E edit · C schedule</p></div>
         <div className="flex items-center gap-2 text-sm"><select className="input w-auto" value={format} onChange={(e) => setFormat(e.target.value)}><option value="">All formats</option>{Object.entries(FORMAT_LABEL).filter(([k]) => k !== "upload").map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><Badge tone="brand">{kept} kept this session</Badge><Badge>{stack?.remaining ?? 0} left{stack?.generating ? ` · ${stack.generating} rendering` : ""}</Badge></div>
       </div>
       {!stack ? <div className="py-20 grid place-items-center"><Spinner /></div> : !top ? (
-        stack.generating > 0 ? <div className="py-20 text-center"><Spinner className="mx-auto" /><p className="mt-3 text-slate-600">Rendering {stack.generating} new candidates…</p></div> :
+        stack.generating > 0 ? <div className="py-20 text-center"><Spinner className="mx-auto" /><p className="mt-3 text-[var(--color-muted)]">Rendering {stack.generating} new candidates…</p></div> :
         <Empty title="Your stack is empty" body={`Generate more candidates (daily limit ${stack.daily_limit} on your plan).`} action={<div className="flex gap-2 justify-center"><button className="btn-primary" onClick={generateMore}>Generate 20 more</button><Link href="/app/content" className="btn-secondary">Go to library</Link></div>} />
       ) : (
         <div className="mt-6 grid gap-8 md:grid-cols-[360px_1fr] items-start">
@@ -50,16 +50,16 @@ export default function Blitz() {
             {stack.items[1] && <div className="absolute inset-0 scale-95 translate-y-3 opacity-50 pointer-events-none"><MediaPreview item={stack.items[1]} /></div>}
             <div className={`relative ${dir === "r" ? "swipe-right" : dir === "l" ? "swipe-left" : ""}`}><MediaPreview item={top} autoPlay /></div>
             <div className="mt-4 flex items-center justify-center gap-4">
-              <button onClick={() => swipe("skip")} className="h-14 w-14 rounded-full bg-white border border-slate-200 text-2xl shadow hover:bg-slate-50" title="Skip (←)">✕</button>
-              <button onClick={undo} disabled={!last} className="h-10 w-10 rounded-full bg-white border border-slate-200 text-sm shadow disabled:opacity-40" title="Undo (Z)">↶</button>
+              <button onClick={() => swipe("skip")} className="h-14 w-14 rounded-full bg-[var(--color-surface)] border border-[var(--color-hairline)] text-2xl shadow hover:bg-[var(--color-surface-2)]" title="Skip (←)">✕</button>
+              <button onClick={undo} disabled={!last} className="h-10 w-10 rounded-full bg-[var(--color-surface)] border border-[var(--color-hairline)] text-sm shadow disabled:opacity-40" title="Undo (Z)">↶</button>
               <button onClick={() => swipe("keep")} className="h-14 w-14 rounded-full bg-brand-600 text-white text-2xl shadow hover:bg-brand-700" title="Keep (→)">♥</button>
             </div>
           </div>
           <div className="card p-6 space-y-4">
-            <div className="flex items-center gap-2 flex-wrap"><Badge tone="brand">{FORMAT_LABEL[top.format]}</Badge>{top.character && <Badge>{top.character.name}</Badge>}{top.predicted_score !== null && <Badge tone="green">Score {Math.round((top.predicted_score ?? 0) * 100)}</Badge>}<span className="text-xs text-slate-400">{top.media.duration_ms ? `${Math.round(top.media.duration_ms / 1000)}s` : ""}</span></div>
+            <div className="flex items-center gap-2 flex-wrap"><Badge tone="brand">{FORMAT_LABEL[top.format]}</Badge>{top.character && <Badge>{top.character.name}</Badge>}{top.predicted_score !== null && <Badge tone="green">Score {Math.round((top.predicted_score ?? 0) * 100)}</Badge>}<span className="text-xs text-[var(--color-faint)]">{top.media.duration_ms ? `${Math.round(top.media.duration_ms / 1000)}s` : ""}</span></div>
             <h2 className="text-2xl font-bold">{top.hook}</h2>
-            {top.script && <div><div className="label">Script</div><p className="text-sm text-slate-700 whitespace-pre-line">{top.script}</p></div>}
-            <div><div className="label">Caption</div><p className="text-sm text-slate-700">{top.caption}</p><p className="text-xs text-brand-600 mt-1">{top.hashtags.map((h) => `#${h}`).join(" ")}</p></div>
+            {top.script && <div><div className="label">Script</div><p className="text-sm text-[var(--color-text)] whitespace-pre-line">{top.script}</p></div>}
+            <div><div className="label">Caption</div><p className="text-sm text-[var(--color-text)]">{top.caption}</p><p className="text-xs text-brand-600 mt-1">{top.hashtags.map((h) => `#${h}`).join(" ")}</p></div>
             <div className="flex gap-2 pt-2"><button className="btn-secondary" onClick={() => setEditing(top)}>Edit (E)</button><button className="btn-secondary" onClick={() => setScheduling(top)} disabled={!me?.plan.limits.scheduling}>{me?.plan.limits.scheduling ? "Keep & schedule (C)" : "Schedule (paid plans)"}</button></div>
           </div>
         </div>
