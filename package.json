@@ -14,7 +14,8 @@
     "test:browser": "playwright test",
     "test:stripe": "tsx scripts/stripe-sim.ts",
     "backup": "bash scripts/backup.sh",
-    "qa": "tsx scripts/routes-check.ts qa"
+    "qa": "tsx scripts/routes-check.ts qa",
+    "bulk:upload": "tsx scripts/bulk-upload-clips.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
