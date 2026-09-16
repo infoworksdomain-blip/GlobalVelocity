@@ -1,28 +1,69 @@
 @import "tailwindcss";
 @theme {
   /* Single electric accent (indigo-violet) -- deliberately not blue-family "AI SaaS default" and not
-     Fastlane's crimson. One accent, not two soft pastel ones. */
+     Fastlane's crimson. One accent, not two soft pastel ones. Identical in both themes (brand identity
+     doesn't change with light/dark). */
   --color-brand-50: #EDE9FE; --color-brand-100: #DDD4FE; --color-brand-200: #C2B2FD; --color-brand-400: #8B76FA;
   --color-brand-500: #6E56F8; --color-brand-600: #5A43E0; --color-brand-700: #4732BD; --color-brand-900: #241A5C;
   --color-accent-400: #8B76FA; --color-accent-500: #6E56F8;
-  /* Semantic status tokens -- the one source of truth for status color everywhere (Badge, calendar pills,
-     everything), fixing a real inconsistency: status colors used to be hand-duplicated with different
-     shades in ui.tsx and calendar/page.tsx. */
-  --color-success: #3DDC97; --color-warning: #FBBF24; --color-danger: #FB7185; --color-info: #5EA1F7;
-  /* Charcoal surface scale -- near-black base, not pure black (keeps depth legible), layered elevation via
-     border + subtle glow instead of drop shadows (shadows barely read on a dark page background). */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-sans);
+}
+/*
+ * Light/dark theme tokens. Dark is the app's default/primary identity (bare :root), light is the
+ * override layer -- the inverse of the usual "light default" pattern, deliberate since the approved
+ * direction is dark-first. An explicit toggle (ThemeToggle, data-theme attribute + localStorage) always
+ * wins over system preference in both directions; system preference governs only when no explicit
+ * choice has been made.
+ */
+:root {
   --color-ink: #0A0A0D; --color-surface: #131318; --color-surface-2: #1B1C24; --color-surface-3: #24252F;
   --color-hairline: #26262F; --color-hairline-2: #34353F;
   --color-text: #F5F5F7; --color-muted: #93949E; --color-faint: #5C5D6B;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: var(--font-space-grotesk), var(--font-sans);
+  --color-success: #3DDC97; --color-warning: #FBBF24; --color-danger: #FB7185; --color-info: #5EA1F7;
   --shadow-soft: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 32px -18px rgba(0,0,0,.65);
   --shadow-lift: 0 24px 48px -20px rgba(110,86,248,.4);
   --shadow-glow: 0 0 0 1px rgba(110,86,248,.5), 0 0 24px -4px rgba(110,86,248,.55);
+  --bg-glow: radial-gradient(1100px 500px at 15% -10%, rgba(110,86,248,.10) 0%, transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(94,161,247,.06) 0%, transparent 55%);
+  --hero-glow: radial-gradient(1200px 600px at 20% -10%, rgba(110,86,248,.16) 0%, transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(94,161,247,.10) 0%, transparent 55%);
+  --selection-bg: rgba(110,86,248,.35); --selection-fg: #fff;
+  /* Accent-colored TEXT on a tinted accent background (eyebrow, active nav, brand badge, gradient-text) --
+     needs a light shade on dark surfaces but a dark shade on light surfaces, unlike the brand-* tokens
+     above which are fixed (those are used as solid fills/icons, not small text, so contrast is less
+     sensitive). */
+  --color-accent-text: #C2B2FD; --grad-1: #C2B2FD; --grad-2: #8B76FA; --grad-3: #5EA1F7;
 }
-html { scroll-behavior: smooth; }
-body { @apply bg-[var(--color-ink)] text-[var(--color-text)] antialiased; font-feature-settings: "cv11", "ss01"; background-image: radial-gradient(1100px 500px at 15% -10%, rgba(110,86,248,.10) 0%, transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(94,161,247,.06) 0%, transparent 55%); background-attachment: fixed; }
-::selection { background: rgba(110,86,248,.35); color: #fff; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --color-ink: #FAFAFB; --color-surface: #FFFFFF; --color-surface-2: #F2F2F6; --color-surface-3: #E7E7EF;
+    --color-hairline: #E5E5EB; --color-hairline-2: #D7D7E1;
+    --color-text: #17171C; --color-muted: #5C5D6B; --color-faint: #8B8CA0;
+    --color-success: #0F9D58; --color-warning: #B45309; --color-danger: #DC2626; --color-info: #2563EB;
+    --shadow-soft: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(15,23,42,.18);
+    --shadow-lift: 0 12px 40px -16px rgba(94,67,224,.3);
+    --shadow-glow: 0 0 0 1px rgba(90,67,224,.35), 0 0 20px -6px rgba(90,67,224,.35);
+    --bg-glow: radial-gradient(1100px 500px at 15% -10%, rgba(110,86,248,.06) 0%, transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(94,161,247,.05) 0%, transparent 55%);
+    --hero-glow: radial-gradient(1200px 600px at 20% -10%, rgba(110,86,248,.08) 0%, transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(94,161,247,.06) 0%, transparent 55%);
+    --selection-bg: #DFE6FF; --selection-fg: #17171C;
+    --color-accent-text: #4732BD; --grad-1: #4732BD; --grad-2: #5A43E0; --grad-3: #2563EB;
+  }
+}
+:root[data-theme="light"] {
+  --color-ink: #FAFAFB; --color-surface: #FFFFFF; --color-surface-2: #F2F2F6; --color-surface-3: #E7E7EF;
+  --color-hairline: #E5E5EB; --color-hairline-2: #D7D7E1;
+  --color-text: #17171C; --color-muted: #5C5D6B; --color-faint: #8B8CA0;
+  --color-success: #0F9D58; --color-warning: #B45309; --color-danger: #DC2626; --color-info: #2563EB;
+  --shadow-soft: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(15,23,42,.18);
+  --shadow-lift: 0 12px 40px -16px rgba(94,67,224,.3);
+  --shadow-glow: 0 0 0 1px rgba(90,67,224,.35), 0 0 20px -6px rgba(90,67,224,.35);
+  --bg-glow: radial-gradient(1100px 500px at 15% -10%, rgba(110,86,248,.06) 0%, transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(94,161,247,.05) 0%, transparent 55%);
+  --hero-glow: radial-gradient(1200px 600px at 20% -10%, rgba(110,86,248,.08) 0%, transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(94,161,247,.06) 0%, transparent 55%);
+  --selection-bg: #DFE6FF; --selection-fg: #17171C;
+  --color-accent-text: #4732BD; --grad-1: #4732BD; --grad-2: #5A43E0; --grad-3: #2563EB;
+}
+html { scroll-behavior: smooth; color-scheme: light dark; }
+body { @apply bg-[var(--color-ink)] text-[var(--color-text)] antialiased; font-feature-settings: "cv11", "ss01"; background-image: var(--bg-glow); background-attachment: fixed; transition: background-color .15s ease, color .15s ease; }
+::selection { background: var(--selection-bg); color: var(--selection-fg); }
 .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50; }
 .btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-white active:scale-[.98]; background: linear-gradient(180deg, var(--color-brand-400), var(--color-brand-500)); box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 8px 20px -8px rgba(110,86,248,.65); }
 .btn-primary:hover { background: linear-gradient(180deg, var(--color-brand-400), var(--color-brand-600)); }
@@ -45,16 +86,16 @@ body { @apply bg-[var(--color-ink)] text-[var(--color-text)] antialiased; font-f
 .badge-blue { background: rgba(94,161,247,.14); color: var(--color-info); }
 .badge-amber { background: rgba(251,191,36,.14); color: var(--color-warning); }
 .badge-red { background: rgba(251,113,133,.14); color: var(--color-danger); }
-.badge-brand { background: rgba(110,86,248,.16); color: #C2B2FD; }
+.badge-brand { background: rgba(110,86,248,.16); color: var(--color-accent-text); }
 .kpi { border-radius: 1rem; border: 1px solid var(--color-hairline); background: var(--color-surface); box-shadow: var(--shadow-soft); padding: 1.25rem; }
 .nav-link { @apply flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium transition; color: var(--color-muted); }
 .nav-link:hover { background: var(--color-surface-2); color: var(--color-text); }
-.nav-link.active { background: rgba(110,86,248,.14); color: #C2B2FD; font-weight: 600; }
+.nav-link.active { background: rgba(110,86,248,.14); color: var(--color-accent-text); font-weight: 600; }
 .nav-link svg { @apply h-4 w-4 opacity-70; } .nav-link.active svg { @apply opacity-100; }
 .page-title { font-family: var(--font-display); @apply text-2xl md:text-[28px] font-bold tracking-tight; color: var(--color-text); }
-.eyebrow { @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold; background: rgba(110,86,248,.12); color: #C2B2FD; border: 1px solid rgba(110,86,248,.25); }
-.gradient-text { background: linear-gradient(90deg, #C2B2FD 0%, #8B76FA 45%, #5EA1F7 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.hero-bg { background: radial-gradient(1200px 600px at 20% -10%, rgba(110,86,248,.16) 0%, transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(94,161,247,.10) 0%, transparent 55%); }
+.eyebrow { @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold; background: rgba(110,86,248,.12); color: var(--color-accent-text); border: 1px solid rgba(110,86,248,.25); }
+.gradient-text { background: linear-gradient(90deg, var(--grad-1) 0%, var(--grad-2) 45%, var(--grad-3) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero-bg { background: var(--hero-glow); }
 .table { @apply w-full text-sm; } .table th { @apply text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3; color: var(--color-muted); background: var(--color-surface-2); } .table td { @apply px-4 py-3 align-middle; border-top: 1px solid var(--color-hairline); } .table tr:hover td { background: rgba(255,255,255,.02); }
 @keyframes swipe-out-right { to { transform: translateX(120%) rotate(12deg); opacity: 0; } }
 @keyframes swipe-out-left { to { transform: translateX(-120%) rotate(-12deg); opacity: 0; } }

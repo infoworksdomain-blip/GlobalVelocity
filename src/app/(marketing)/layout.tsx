@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Zap } from "lucide-react";
 import { APP, TOOLS, COMPARE, INDUSTRIES } from "@/content/site";
 import { CookieBanner } from "@/components/cookie-banner";
+import { ThemeToggle } from "@/components/theme-toggle";
 const COLS: [string, [string, string][]][] = [
   ["Product", [["/#features", "Features"], ["/pricing", "Pricing"], ["/faq", "FAQ"], ["/developers", "API & MCP"], ["/affiliates", "Affiliate program"]]],
   ["Tools", TOOLS.slice(0, 6).map((t) => [`/tools/${t.slug}`, t.title])],
@@ -17,7 +18,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           <nav className="hidden md:flex items-center gap-7 text-sm font-medium" style={{ color: "var(--color-muted)" }} aria-label="Main">
             <Link href="/#features" className="hover:text-white transition">Features</Link><Link href="/tools/ai-ugc-video-generator" className="hover:text-white transition">Tools</Link><Link href="/pricing" className="hover:text-white transition">Pricing</Link><Link href="/faq" className="hover:text-white transition">FAQ</Link><Link href="/blog" className="hover:text-white transition">Blog</Link><Link href="/developers" className="hover:text-white transition">API</Link>
           </nav>
-          <div className="flex items-center gap-2"><Link href="/login" className="btn-ghost">Log in</Link><Link href="/login" className="btn-primary">Start free</Link></div>
+          <div className="flex items-center gap-2"><ThemeToggle /><Link href="/login" className="btn-ghost">Log in</Link><Link href="/login" className="btn-primary">Start free</Link></div>
         </div>
       </header>
       <main className="flex-1">{children}</main>

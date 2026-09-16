@@ -15,6 +15,16 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 } },
   icons: { icon: "/icon.svg" },
 };
+// Runs before first paint to avoid a flash of the wrong theme: applies a saved explicit choice
+// immediately; if none was ever saved, the CSS media-query default (dark, or light on a light-preferring
+// system) applies with no JS needed.
+const THEME_INIT = `try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}><body><ToastProvider>{children}</ToastProvider></body></html>;
+  return (
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
+      <head><script dangerouslySetInnerHTML={{ __html: THEME_INIT }} /></head>
+      <body><ToastProvider>{children}</ToastProvider></body>
+    </html>
+  );
 }
