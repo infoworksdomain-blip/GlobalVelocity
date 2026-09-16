@@ -4,9 +4,19 @@ import { promisify } from "util";
 import { mkdtemp, writeFile, readFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import { fetch as undiciFetch, Agent } from "undici";
 import { putObject } from "@/lib/storage";
 import { CREDIT_TARIFF } from "@/lib/plans";
 import type { OverlayStyle } from "@/db/schema";
+
+// Node's built-in fetch (undici) defaults headersTimeout/bodyTimeout to 5 minutes -- too short for
+// talking-head video providers whose renders routinely take longer (fal.ai's Kling Avatar model, e.g.,
+// measured at ~5 minutes for a 17s clip). A custom Agent can't be passed to Node's *global* fetch here:
+// Node bundles its own internal undici version, and a dispatcher built from the separately-installed
+// undici package (a different version) fails with "invalid onRequestStart method" (verified live). So
+// this call uses undici's own fetch + Agent together (self-consistent, same package instance) instead of
+// the global fetch -- only the video-provider call is affected; every other fetch in the app is unchanged.
+const longRenderDispatcher = new Agent({ headersTimeout: 900_000, bodyTimeout: 900_000 });
 
 const exec = promisify(execFile);
 export const W = 1080, H = 1920;
@@ -164,7 +174,7 @@ export const tts: TtsProvider = async (text, voiceId) => {
 /** Generic HTTP contract: POST {script, character_image_url, audio_base64} → {video_url}. Wire HeyGen/Hedra/Sync adapters here. */
 export const talkingHead: TalkingHeadProvider = async ({ script, audio, characterImageUrl, voiceId, characterId }) => {
   if (live() && process.env.VIDEO_PROVIDER_URL) {
-    const r = await fetch(process.env.VIDEO_PROVIDER_URL, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${process.env.VIDEO_PROVIDER_KEY ?? ""}` }, body: JSON.stringify({ script, character_image_url: characterImageUrl, voice_id: voiceId, character_id: characterId, audio_base64: audio?.toString("base64") ?? null, aspect: "9:16" }) });
+    const r = await undiciFetch(process.env.VIDEO_PROVIDER_URL, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${process.env.VIDEO_PROVIDER_KEY ?? ""}` }, body: JSON.stringify({ script, character_image_url: characterImageUrl, voice_id: voiceId, character_id: characterId, audio_base64: audio?.toString("base64") ?? null, aspect: "9:16" }), dispatcher: longRenderDispatcher });
     if (!r.ok) throw new Error(`Video provider failed ${r.status}: ${(await r.text()).slice(0, 300)}`);
     const j = await r.json() as { video_url: string; job_id?: string };
     const v = await fetch(j.video_url); return { mp4: Buffer.from(await v.arrayBuffer()), providerJobId: j.job_id };
