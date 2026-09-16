@@ -29,6 +29,13 @@
       "when": 1789522349102,
       "tag": "0003_sloppy_songbird",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789559545211,
+      "tag": "0004_mighty_luminals",
+      "breakpoints": true
     }
   ]
 }

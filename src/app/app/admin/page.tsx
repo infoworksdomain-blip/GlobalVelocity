@@ -15,6 +15,9 @@ export default function Admin() {
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [bulkMeta, setBulkMeta] = useState({ category: "", style_tags: "", gender: "", setting: "", licence_type: "audio_replace", tier: "growth" });
   const [bulkProgress, setBulkProgress] = useState<{ uploaded: number; uploadFailed: number; total: number; batchId: string | null; completed: number; failed: number; status: string } | null>(null);
+  const [bulkImageFiles, setBulkImageFiles] = useState<File[]>([]);
+  const [bulkImageMeta, setBulkImageMeta] = useState({ category: "", style_tags: "", gender: "", setting: "", tier: "growth" });
+  const [bulkImageProgress, setBulkImageProgress] = useState<{ uploaded: number; uploadFailed: number; total: number; batchId: string | null; completed: number; failed: number; status: string } | null>(null);
   // Guard against out-of-order responses when switching tabs quickly: only the latest request may set state.
   const load = (v = view, query = q) => { const id = reqId + 1; setReqId(id); setData(null); api<Record<string, unknown>>(`/admin?view=${v}${query ? `&q=${encodeURIComponent(query)}` : ""}`).then((d) => setReqId((cur) => { if (cur === id) setData(d); return cur; })).catch((e) => setReqId((cur) => { if (cur === id) setData({ error: e.message }); return cur; })); };
   useEffect(() => { if (view === "curation") setData({}); else load(view, ""); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [view]);
@@ -54,6 +57,39 @@ export default function Admin() {
     poll();
     setBulkFiles([]);
   }, "Bulk upload started");
+  const runBulkImageUpload = () => run(async () => {
+    const styleTags = bulkImageMeta.style_tags.split(",").map((x) => x.trim()).filter(Boolean);
+    setBulkImageProgress({ uploaded: 0, uploadFailed: 0, total: bulkImageFiles.length, batchId: null, completed: 0, failed: 0, status: "uploading" });
+    let batchId: string | null = null;
+    const CHUNK = 40;
+    for (let i = 0; i < bulkImageFiles.length; i += CHUNK) {
+      const slice = bulkImageFiles.slice(i, i + CHUNK);
+      try {
+        const { uploads } = await api<{ uploads: { key: string; upload_url: string }[] }>("/admin/ugc-images/batch-presign", { method: "POST", json: { files: slice.map((f) => ({ filename: f.name, content_type: f.type || "image/jpeg" })) } });
+        const okKeys: string[] = [];
+        for (let j = 0; j < slice.length; j++) {
+          try {
+            const r = await fetch(uploads[j].upload_url, { method: "PUT", body: slice[j], headers: { "content-type": slice[j].type || "image/jpeg" } });
+            if (r.ok) { okKeys.push(uploads[j].key); setBulkImageProgress((p) => p && { ...p, uploaded: p.uploaded + 1 }); }
+            else setBulkImageProgress((p) => p && { ...p, uploadFailed: p.uploadFailed + 1 });
+          } catch { setBulkImageProgress((p) => p && { ...p, uploadFailed: p.uploadFailed + 1 }); }
+        }
+        if (okKeys.length) {
+          const regResult: { batch_id: string; registered: number } = await api("/admin/ugc-images/batch-register", { method: "POST", json: { batch_id: batchId ?? undefined, images: okKeys.map((key) => ({ storage_key: key, category: bulkImageMeta.category || undefined, style_tags: styleTags, gender: bulkImageMeta.gender || undefined, setting: bulkImageMeta.setting || undefined, tier: bulkImageMeta.tier })) } });
+          batchId = regResult.batch_id;
+        }
+      } catch { setBulkImageProgress((p) => p && { ...p, uploadFailed: p.uploadFailed + slice.length }); }
+    }
+    setBulkImageProgress((p) => p && { ...p, batchId, status: batchId ? "processing" : "done" });
+    const poll = async () => {
+      if (!batchId) return;
+      const { batch } = await api<{ batch: { completedCount: number; failedCount: number; requestedCount: number; status: string } }>(`/admin/ugc-image-batches/${batchId}`);
+      setBulkImageProgress((p) => p && { ...p, completed: batch.completedCount, failed: batch.failedCount, status: batch.status });
+      if (batch.status !== "done") setTimeout(poll, 3000);
+    };
+    poll();
+    setBulkImageFiles([]);
+  }, "Bulk image upload started");
 
   return (
     <div className="space-y-5">{wall}
@@ -140,6 +176,27 @@ export default function Admin() {
                 {bulkProgress.uploadFailed > 0 && <div className="text-red-600">{bulkProgress.uploadFailed} files failed to upload and were skipped (not registered)</div>}
                 {bulkProgress.batchId && <div className="flex justify-between pt-1"><span>Processing (thumbnails/duration)</span><b>{bulkProgress.completed + bulkProgress.failed} / {bulkProgress.uploaded} — {bulkProgress.status}</b></div>}
                 {bulkProgress.failed > 0 && <div className="text-red-600">{bulkProgress.failed} failed to process</div>}
+              </div>}
+            </div>
+
+            <div className="card p-5 space-y-2 md:col-span-2"><h2 className="font-semibold">Bulk upload images</h2><p className="text-xs text-slate-500">Select up to thousands of image files at once. Uploads go direct to storage; dimensions and a thumbnail are extracted in the background.</p>
+              <input type="file" accept="image/*" multiple className="input" onChange={(e) => setBulkImageFiles(Array.from(e.target.files ?? []))} />
+              {bulkImageFiles.length > 0 && <p className="text-xs text-slate-500">{bulkImageFiles.length} files selected</p>}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <input className="input" placeholder="Category (e.g. fitness)" value={bulkImageMeta.category} onChange={(e) => setBulkImageMeta({ ...bulkImageMeta, category: e.target.value })} />
+                <input className="input" placeholder="Style tags, comma separated" value={bulkImageMeta.style_tags} onChange={(e) => setBulkImageMeta({ ...bulkImageMeta, style_tags: e.target.value })} />
+                <input className="input" placeholder="Setting (e.g. gym)" value={bulkImageMeta.setting} onChange={(e) => setBulkImageMeta({ ...bulkImageMeta, setting: e.target.value })} />
+                <select className="input" value={bulkImageMeta.gender} onChange={(e) => setBulkImageMeta({ ...bulkImageMeta, gender: e.target.value })}><option value="">Any gender</option><option value="male">Male</option><option value="female">Female</option></select>
+                <select className="input" value={bulkImageMeta.tier} onChange={(e) => setBulkImageMeta({ ...bulkImageMeta, tier: e.target.value })}><option value="free">free</option><option value="starter">starter</option><option value="growth">growth</option><option value="pro">pro</option></select>
+              </div>
+              <p className="text-xs text-slate-400">This metadata applies to the whole selection. Upload files with different categories/tags in separate batches.</p>
+              <button className="btn-primary" disabled={!bulkImageFiles.length} onClick={runBulkImageUpload}>Upload {bulkImageFiles.length || ""} images</button>
+              {bulkImageProgress && <div className="rounded-xl bg-slate-50 p-3 text-xs space-y-1">
+                <div className="flex justify-between"><span>Uploading</span><b>{bulkImageProgress.uploaded + bulkImageProgress.uploadFailed} / {bulkImageProgress.total}</b></div>
+                <div className="h-1.5 rounded-full bg-slate-200"><div className="h-1.5 rounded-full bg-brand-600" style={{ width: `${bulkImageProgress.total ? (100 * (bulkImageProgress.uploaded + bulkImageProgress.uploadFailed)) / bulkImageProgress.total : 0}%` }} /></div>
+                {bulkImageProgress.uploadFailed > 0 && <div className="text-red-600">{bulkImageProgress.uploadFailed} files failed to upload and were skipped (not registered)</div>}
+                {bulkImageProgress.batchId && <div className="flex justify-between pt-1"><span>Processing (dimensions/thumbnail)</span><b>{bulkImageProgress.completed + bulkImageProgress.failed} / {bulkImageProgress.uploaded} — {bulkImageProgress.status}</b></div>}
+                {bulkImageProgress.failed > 0 && <div className="text-red-600">{bulkImageProgress.failed} failed to process</div>}
               </div>}
             </div>
           </div>}

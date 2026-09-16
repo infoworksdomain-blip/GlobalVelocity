@@ -90,6 +90,7 @@ const copySchema = z.object({
 const formatBrief: Record<ContentFormat, string> = {
   ai_ugc: "A 25-40 second talking-head UGC script spoken casually to camera, first person, phone-camera energy. 80-120 words.",
   human_ugc: "A 20-30 second voiceover script to lay over real creator b-roll. 60-90 words.",
+  human_image: "A caption for a real photo post -- no script or on-screen text needed, just a strong caption and hook.",
   slideshow: "A TikTok photo carousel: 5-7 slides, each with a punchy title (<=8 words) and a one-sentence body. Slide 1 is the hook, last slide is the CTA. Return them in slides[].",
   hook_demo: "A 15-25 second hook + demo: an on-screen hook line, then 3-4 short on-screen text beats describing what the viewer sees. Return beats in on_screen_text.",
   meme: "A meme: meme_top and meme_bottom lines that reframe the audience's pain point with humour. Keep each under 12 words.",
@@ -114,6 +115,6 @@ export async function generateCopy(profile: CompanyProfileData, angle: Angle, fo
 
 /** Simple performance prior used to order the Velocity stack (FR-5 / design decision †). */
 export function predictedScore(format: ContentFormat, trendVelocity: number | null, angleNovelty: number) {
-  const base: Record<ContentFormat, number> = { ai_ugc: 0.62, human_ugc: 0.66, slideshow: 0.6, hook_demo: 0.55, meme: 0.5, remix: 0.58, upload: 0.5 };
+  const base: Record<ContentFormat, number> = { ai_ugc: 0.62, human_ugc: 0.66, human_image: 0.6, slideshow: 0.6, hook_demo: 0.55, meme: 0.5, remix: 0.58, upload: 0.5 };
   return Math.min(0.99, base[format] + (trendVelocity ?? 0) * 0.2 + angleNovelty * 0.15);
 }

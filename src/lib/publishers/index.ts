@@ -92,6 +92,11 @@ const instagram: Publisher = {
       const c = await fetch(`${base}/media`, { method: "POST", body: new URLSearchParams({ media_type: "REELS", video_url: i.mediaUrl, caption, share_to_feed: String(i.options.share_to_feed !== false), access_token: i.accessToken, ...(i.thumbnailUrl ? { cover_url: i.thumbnailUrl } : {}) }) }).then((x) => x.json()) as { id: string; error?: { message: string } };
       if (c.error) throw new Error(`IG container error: ${c.error.message}`); creationId = c.id;
       for (let n = 0; n < 40; n++) { await sleep(10_000); const s = await fetch(`https://graph.facebook.com/v21.0/${creationId}?fields=status_code&access_token=${i.accessToken}`).then((x) => x.json()) as { status_code: string }; if (s.status_code === "FINISHED") break; if (s.status_code === "ERROR") throw new Error("IG media processing failed"); }
+    } else if ((i.imageUrls ?? []).length === 1) {
+      // A lone image must NOT go through the carousel path -- Meta's Graph API requires a CAROUSEL to
+      // have 2-10 children and rejects a single-child one; post it as a plain IMAGE container instead.
+      const c = await fetch(`${base}/media`, { method: "POST", body: new URLSearchParams({ media_type: "IMAGE", image_url: i.imageUrls![0], caption, access_token: i.accessToken }) }).then((x) => x.json()) as { id: string; error?: { message: string } };
+      if (c.error) throw new Error(`IG container error: ${c.error.message}`); creationId = c.id;
     } else {
       const children: string[] = [];
       for (const u of i.imageUrls ?? []) { const c = await fetch(`${base}/media`, { method: "POST", body: new URLSearchParams({ image_url: u, is_carousel_item: "true", access_token: i.accessToken }) }).then((x) => x.json()) as { id: string }; children.push(c.id); }
@@ -151,12 +156,24 @@ const linkedin: Publisher = {
   async publish(i) {
     const owner = (i.options.organization_urn as string) || `urn:li:person:${i.externalId}`;
     const h = { authorization: `Bearer ${i.accessToken}`, "content-type": "application/json", "LinkedIn-Version": "202409", "X-Restli-Protocol-Version": "2.0.0" };
-    const media = await fetch(i.mediaUrl); const buf = Buffer.from(await media.arrayBuffer());
-    const init = await fetch("https://api.linkedin.com/rest/videos?action=initializeUpload", { method: "POST", headers: h, body: JSON.stringify({ initializeUploadRequest: { owner, fileSizeBytes: buf.length, uploadCaptions: false, uploadThumbnail: false } }) }).then((x) => x.json()) as { value: { video: string; uploadInstructions: { uploadUrl: string; firstByte: number; lastByte: number }[] } };
-    const etags: string[] = [];
-    for (const part of init.value.uploadInstructions) { const r = await fetch(part.uploadUrl, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: buf.subarray(part.firstByte, part.lastByte + 1) }); etags.push(r.headers.get("etag") ?? ""); }
-    await fetch("https://api.linkedin.com/rest/videos?action=finalizeUpload", { method: "POST", headers: h, body: JSON.stringify({ finalizeUploadRequest: { video: init.value.video, uploadToken: "", uploadedPartIds: etags } }) });
-    const post = await fetch("https://api.linkedin.com/rest/posts", { method: "POST", headers: h, body: JSON.stringify({ author: owner, commentary: withTags(i.caption, i.hashtags).slice(0, 3000), visibility: "PUBLIC", distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] }, content: { media: { id: init.value.video, title: (i.title ?? "").slice(0, 200) } }, lifecycleState: "PUBLISHED", isReshareDisabledByAuthor: false }) });
+    let mediaId: string;
+    if (i.mediaType === "images") {
+      // Images API: single initializeUpload -> one PUT of the raw bytes -> done, no finalize step (unlike video).
+      const media = await fetch((i.imageUrls ?? [])[0] ?? i.mediaUrl); const buf = Buffer.from(await media.arrayBuffer());
+      const init = await fetch("https://api.linkedin.com/rest/images?action=initializeUpload", { method: "POST", headers: h, body: JSON.stringify({ initializeUploadRequest: { owner } }) }).then((x) => x.json()) as { value: { uploadUrl: string; image: string } };
+      await fetch(init.value.uploadUrl, { method: "PUT", body: buf });
+      mediaId = init.value.image;
+    } else {
+      const media = await fetch(i.mediaUrl); const buf = Buffer.from(await media.arrayBuffer());
+      const init = await fetch("https://api.linkedin.com/rest/videos?action=initializeUpload", { method: "POST", headers: h, body: JSON.stringify({ initializeUploadRequest: { owner, fileSizeBytes: buf.length, uploadCaptions: false, uploadThumbnail: false } }) }).then((x) => x.json()) as { value: { video: string; uploadInstructions: { uploadUrl: string; firstByte: number; lastByte: number }[] } };
+      const etags: string[] = [];
+      for (const part of init.value.uploadInstructions) { const r = await fetch(part.uploadUrl, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: buf.subarray(part.firstByte, part.lastByte + 1) }); etags.push(r.headers.get("etag") ?? ""); }
+      await fetch("https://api.linkedin.com/rest/videos?action=finalizeUpload", { method: "POST", headers: h, body: JSON.stringify({ finalizeUploadRequest: { video: init.value.video, uploadToken: "", uploadedPartIds: etags } }) });
+      mediaId = init.value.video;
+    }
+    // LinkedIn's content.media accepts `title` for video posts but `altText` for image posts (docs confirmed).
+    const mediaField = i.mediaType === "images" ? { id: mediaId, altText: (i.title ?? "").slice(0, 200) } : { id: mediaId, title: (i.title ?? "").slice(0, 200) };
+    const post = await fetch("https://api.linkedin.com/rest/posts", { method: "POST", headers: h, body: JSON.stringify({ author: owner, commentary: withTags(i.caption, i.hashtags).slice(0, 3000), visibility: "PUBLIC", distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] }, content: { media: mediaField }, lifecycleState: "PUBLISHED", isReshareDisabledByAuthor: false }) });
     if (!post.ok) throw new Error(`LinkedIn post failed ${post.status}: ${await post.text()}`);
     const id = post.headers.get("x-restli-id") ?? ""; return { externalPostId: id, permalink: id ? `https://www.linkedin.com/feed/update/${id}` : null };
   },

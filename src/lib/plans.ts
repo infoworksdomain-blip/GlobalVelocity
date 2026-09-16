@@ -10,7 +10,7 @@ export type PlanDef = {
   limits: {
     workspaces: number; saves: number | null; candidatesPerDay: number; creditsMonthly: number; creditsRecurring: boolean;
     socialsPerPlatform: number | null; platforms: ("tiktok" | "instagram" | "youtube" | "linkedin")[];
-    characterTier: Plan | "preview"; ugcClipsMonthly: number; scheduling: boolean; trendRemix: boolean;
+    characterTier: Plan | "preview"; ugcClipsMonthly: number; ugcImagesMonthly: number; scheduling: boolean; trendRemix: boolean;
     multiLanguage: boolean; apiRpm: number; teamInvites: boolean; earlyAccess: boolean; watermarkFreeDownloads: boolean;
   };
 };
@@ -21,25 +21,25 @@ export const PLANS: Record<Plan, PlanDef> = {
     id: "free", name: "Free", tagline: "Test the waters", priceMonth: 0,
     features: ["No credit card", "Access to Velocity mode (swipe mode)", "10 AI Studio credits", "Limited content", "Browse features"],
     limits: { workspaces: 1, saves: 3, candidatesPerDay: 20, creditsMonthly: 10, creditsRecurring: false, socialsPerPlatform: 0, platforms: [],
-      characterTier: "preview", ugcClipsMonthly: 0, scheduling: false, trendRemix: false, multiLanguage: false, apiRpm: 0, teamInvites: false, earlyAccess: false, watermarkFreeDownloads: false },
+      characterTier: "preview", ugcClipsMonthly: 0, ugcImagesMonthly: 0, scheduling: false, trendRemix: false, multiLanguage: false, apiRpm: 0, teamInvites: false, earlyAccess: false, watermarkFreeDownloads: false },
   },
   starter: {
     id: "starter", name: "Starter", tagline: "If you're just starting out", priceMonth: 29,
     features: ["20 content saves", "250 AI Studio credits", "TikTok, Instagram, YouTube + LinkedIn", "1 workspace", "25 AI UGC characters", "Velocity mode"],
     limits: { workspaces: 1, saves: 20, candidatesPerDay: 150, creditsMonthly: 250, creditsRecurring: true, socialsPerPlatform: 1, platforms: ALL,
-      characterTier: "starter", ugcClipsMonthly: 0, scheduling: true, trendRemix: true, multiLanguage: false, apiRpm: 60, teamInvites: true, earlyAccess: false, watermarkFreeDownloads: true },
+      characterTier: "starter", ugcClipsMonthly: 0, ugcImagesMonthly: 0, scheduling: true, trendRemix: true, multiLanguage: false, apiRpm: 60, teamInvites: true, earlyAccess: false, watermarkFreeDownloads: true },
   },
   growth: {
     id: "growth", name: "Growth", tagline: "If you're looking to grow fast", priceMonth: 49, badge: "Most popular",
     features: ["100 content saves", "500 AI Studio credits", "Unlimited socials", "3 workspaces", "500+ AI UGC characters", "100 human UGC videos", "Velocity mode"],
     limits: { workspaces: 3, saves: 100, candidatesPerDay: 400, creditsMonthly: 500, creditsRecurring: true, socialsPerPlatform: null, platforms: ALL,
-      characterTier: "growth", ugcClipsMonthly: 100, scheduling: true, trendRemix: true, multiLanguage: false, apiRpm: 300, teamInvites: true, earlyAccess: false, watermarkFreeDownloads: true },
+      characterTier: "growth", ugcClipsMonthly: 100, ugcImagesMonthly: 100, scheduling: true, trendRemix: true, multiLanguage: false, apiRpm: 300, teamInvites: true, earlyAccess: false, watermarkFreeDownloads: true },
   },
   pro: {
     id: "pro", name: "Pro", tagline: "If you want to 10x your marketing", priceMonth: 149,
     features: ["Unlimited content saves", "2000 AI Studio credits", "Unlimited scheduling", "10 workspaces", "2000+ human UGC videos", "Early access to new features", "Multi-language content"],
     limits: { workspaces: 10, saves: null, candidatesPerDay: 1000, creditsMonthly: 2000, creditsRecurring: true, socialsPerPlatform: null, platforms: ALL,
-      characterTier: "pro", ugcClipsMonthly: 2000, scheduling: true, trendRemix: true, multiLanguage: true, apiRpm: 1000, teamInvites: true, earlyAccess: true, watermarkFreeDownloads: true },
+      characterTier: "pro", ugcClipsMonthly: 2000, ugcImagesMonthly: 2000, scheduling: true, trendRemix: true, multiLanguage: true, apiRpm: 1000, teamInvites: true, earlyAccess: true, watermarkFreeDownloads: true },
   },
 };
 export const PLAN_ORDER: Plan[] = ["free", "starter", "growth", "pro"];

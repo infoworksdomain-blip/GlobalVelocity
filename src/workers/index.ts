@@ -3,6 +3,7 @@ import { Worker, type Job } from "bullmq";
 import { connection, coreQueue, renderQueue, enqueue } from "@/lib/queue";
 import { renderMedia, fetchBuf } from "@/lib/render/pipeline";
 import { thumbnail, store, probeDuration } from "@/lib/render";
+import sharp from "sharp";
 import { sendEmail } from "@/lib/email";
 import { emitEvent, deliver } from "@/lib/webhooks";
 import { db, schema } from "@/db";
@@ -18,7 +19,7 @@ import { PLANS, PLAN_ORDER, tierRank } from "@/lib/plans";
 import { planAutomation } from "@/lib/automations";
 import type { ContentFormat, Plan } from "@/db/schema";
 
-const { jobs, companyProfiles, workspaces, accounts, generationBatches, contentItems, characters, trends, scheduledPosts, socialAccounts, postMetrics, automations, automationRuns, notifications, workspaceMembers, brandAssets, ugcClips, ugcClipBatches, users } = schema;
+const { jobs, companyProfiles, workspaces, accounts, generationBatches, contentItems, characters, trends, scheduledPosts, socialAccounts, postMetrics, automations, automationRuns, notifications, workspaceMembers, brandAssets, ugcClips, ugcClipBatches, ugcImages, ugcImageBatches, users } = schema;
 
 async function setJob(id: string, patch: Partial<typeof jobs.$inferInsert>) { await db.update(jobs).set({ ...patch, updatedAt: new Date() }).where(eq(jobs.id, id)); }
 async function notify(workspaceId: string, type: string, title: string, body: string, link?: string) {
@@ -40,8 +41,11 @@ async function profileAnalyze(job: Job<{ jobId: string; workspaceId: string; url
   if (data.product_name) await db.update(workspaces).set({ name: data.product_name }).where(eq(workspaces.id, workspaceId));
 
   if (skipFirstBatch) {
-    const rows = await db.selectDistinct({ category: ugcClips.category }).from(ugcClips).where(and(eq(ugcClips.status, "published"), isNotNull(ugcClips.category)));
-    const availableCategories = rows.map((r) => r.category!).filter(Boolean);
+    const [clipRows, imageRows] = await Promise.all([
+      db.selectDistinct({ category: ugcClips.category }).from(ugcClips).where(and(eq(ugcClips.status, "published"), isNotNull(ugcClips.category))),
+      db.selectDistinct({ category: ugcImages.category }).from(ugcImages).where(and(eq(ugcImages.status, "published"), isNotNull(ugcImages.category))),
+    ]);
+    const availableCategories = [...new Set([...clipRows.map((r) => r.category!), ...imageRows.map((r) => r.category!)].filter(Boolean))];
     const nicheMatch = await matchNiche(data, availableCategories);
     await setJob(jobId, { status: "done", progress: { step: "Done", pct: 100 }, result: { profileId: p.id, niche_match: nicheMatch } });
     return;
@@ -57,7 +61,7 @@ async function profileAnalyze(job: Job<{ jobId: string; workspaceId: string; url
 }
 
 // ---------------- generate.batch ----------------
-const DEFAULT_MIX: Record<ContentFormat, number> = { ai_ugc: 0.35, slideshow: 0.3, hook_demo: 0.15, meme: 0.1, remix: 0.1, human_ugc: 0, upload: 0 };
+const DEFAULT_MIX: Record<ContentFormat, number> = { ai_ugc: 0.35, slideshow: 0.3, hook_demo: 0.15, meme: 0.1, remix: 0.1, human_ugc: 0, human_image: 0, upload: 0 };
 async function generateBatch(job: Job<{ batchId: string }>) {
   const batch = await db.query.generationBatches.findFirst({ where: eq(generationBatches.id, job.data.batchId) });
   if (!batch) return;
@@ -86,6 +90,15 @@ async function generateBatch(job: Job<{ batchId: string }>) {
         params.ugc_style_tags?.length ? sql`${ugcClips.styleTags} && array[${sql.join(params.ugc_style_tags.map((t) => sql`${t}`), sql.raw(","))}]::text[]` : undefined,
       )).orderBy(sql`random()`).limit(batch.requestedCount * 3)
     : [];
+  const ugcImageQuota = PLANS[acc.plan].limits.ugcImagesMonthly; let ugcImageUsed = 0;
+  const images = mix.human_image > 0 && allowedTiers.length
+    ? await db.select().from(ugcImages).where(and(
+        eq(ugcImages.status, "published"), inArray(ugcImages.tier, allowedTiers),
+        sql`(${ugcImages.licenceExpiresAt} is null or ${ugcImages.licenceExpiresAt} > now())`,
+        params.ugc_categories?.length ? inArray(ugcImages.category, params.ugc_categories) : undefined,
+        params.ugc_style_tags?.length ? sql`${ugcImages.styleTags} && array[${sql.join(params.ugc_style_tags.map((t) => sql`${t}`), sql.raw(","))}]::text[]` : undefined,
+      )).orderBy(sql`random()`).limit(batch.requestedCount * 3)
+    : [];
 
   let acc_w = 0; const cumulative = formats.map(([f, w]) => [f, (acc_w += w)] as [string, number]);
   const pick = (i: number): ContentFormat => { const r = ((i * 0.618033) % 1) * acc_w; return (cumulative.find(([, c]) => r <= c)?.[0] ?? "slideshow") as ContentFormat; };
@@ -94,9 +107,12 @@ async function generateBatch(job: Job<{ batchId: string }>) {
     const clip = format === "human_ugc" && clips.length && ugcUsed < ugcQuota ? clips[i % clips.length] : null;
     if (format === "human_ugc" && !clip) format = "ai_ugc"; // graceful fallback when no licensed clips / quota
     if (clip) ugcUsed++;
+    const image = format === "human_image" && images.length && ugcImageUsed < ugcImageQuota ? images[i % images.length] : null;
+    if (format === "human_image" && !image) format = "ai_ugc"; // graceful fallback when no licensed images / quota
+    if (image) ugcImageUsed++;
     const character = format === "ai_ugc" && usable.length ? usable[i % usable.length] : null;
     const trend = format === "remix" && trendRows.length ? trendRows[i % trendRows.length] : null;
-    const [item] = await db.insert(contentItems).values({ workspaceId: batch.workspaceId, batchId: batch.id, format, status: "generating", angle: angles[i].angle, characterId: character?.id, trendId: trend?.id, ugcClipId: clip?.id, language: params.language ?? profile.data.language, provenance: { angle_type: angles[i].type, profile_version: profile.version, similar_to: params.similar_to } }).returning();
+    const [item] = await db.insert(contentItems).values({ workspaceId: batch.workspaceId, batchId: batch.id, format, status: "generating", angle: angles[i].angle, characterId: character?.id, trendId: trend?.id, ugcClipId: clip?.id, ugcImageId: image?.id, language: params.language ?? profile.data.language, provenance: { angle_type: angles[i].type, profile_version: profile.version, similar_to: params.similar_to } }).returning();
     await enqueue("generate.item", { itemId: item.id, angle: angles[i] }, { attempts: 3, priority: batch.source === "automation" ? 5 : 10 });
   }
 }
@@ -109,12 +125,13 @@ async function buildRenderCtx(item: typeof contentItems.$inferSelect) {
   const trend = item.trendId ? await db.query.trends.findFirst({ where: eq(trends.id, item.trendId) }) : null;
   const character = item.characterId ? await db.query.characters.findFirst({ where: eq(characters.id, item.characterId) }) : null;
   const clip = item.ugcClipId ? await db.query.ugcClips.findFirst({ where: eq(ugcClips.id, item.ugcClipId) }) : null;
+  const image = item.ugcImageId ? await db.query.ugcImages.findFirst({ where: eq(ugcImages.id, item.ugcImageId) }) : null;
   const assets = await db.select().from(brandAssets).where(eq(brandAssets.workspaceId, item.workspaceId));
   const shot = assets.find((a) => a.kind === "screenshot" || a.kind === "image");
   const demo = assets.find((a) => a.kind === "demo_video");
   const screenshot = shot ? await fetchBuf(publicUrl(shot.storageKey)) : await fetchBuf(profile.data.brand.screenshots[0]);
   const demoVideo = demo ? await fetchBuf(publicUrl(demo.storageKey)) : null;
-  return { acc, profile, trend, ctx: { prepaid: (item.provenance as { studio?: string }).studio === "video", requestedSeconds: (item.provenance as { requested_seconds?: number }).requested_seconds, itemId: item.id, workspaceId: item.workspaceId, accountId: acc.id, format: item.format, profile: profile.data, screenshot, demoVideo, character: character ? { id: character.id, name: character.name, referenceImages: character.referenceImages.map((k) => (k.startsWith("data:") || k.startsWith("http") ? k : publicUrl(k)!)), voiceId: character.voiceId } : null, clip: clip ? { storageKey: clip.storageKey, licenceType: clip.licenceType, durationMs: clip.durationMs } : null, trend: trend?.recipe ?? null, overlayStyle: item.overlayStyle ?? null } };
+  return { acc, profile, trend, ctx: { prepaid: (item.provenance as { studio?: string }).studio === "video", requestedSeconds: (item.provenance as { requested_seconds?: number }).requested_seconds, itemId: item.id, workspaceId: item.workspaceId, accountId: acc.id, format: item.format, profile: profile.data, screenshot, demoVideo, character: character ? { id: character.id, name: character.name, referenceImages: character.referenceImages.map((k) => (k.startsWith("data:") || k.startsWith("http") ? k : publicUrl(k)!)), voiceId: character.voiceId } : null, clip: clip ? { storageKey: clip.storageKey, licenceType: clip.licenceType, durationMs: clip.durationMs } : null, image: image ? { storageKey: image.storageKey, thumbnailKey: image.thumbnailKey, width: image.width, height: image.height } : null, trend: trend?.recipe ?? null, overlayStyle: item.overlayStyle ?? null } };
 }
 async function generateItem(job: Job<{ itemId: string; angle: { type: string; angle: string } }>) {
   const item = await db.query.contentItems.findFirst({ where: eq(contentItems.id, job.data.itemId) });
@@ -354,12 +371,38 @@ async function ugcThumbnail(job: Job<{ clipId: string }>) {
   }
 }
 
+async function ugcImageProcess(job: Job<{ imageId: string }>) {
+  const image = await db.query.ugcImages.findFirst({ where: eq(ugcImages.id, job.data.imageId) });
+  if (!image) return;
+  try {
+    const buf = await fetchBuf(publicUrl(image.storageKey));
+    if (!buf) throw new Error("uploaded image not readable from storage");
+    const meta = await sharp(buf).metadata();
+    const thumb = await sharp(buf).resize(480, 480, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
+    const thumbKey = await store(image.storageKey.replace(/\.[^.]+$/, "") + "-thumb.jpg", thumb, "image/jpeg");
+    await db.update(ugcImages).set({ status: "published", width: meta.width ?? null, height: meta.height ?? null, thumbnailKey: thumbKey }).where(eq(ugcImages.id, image.id));
+    if (image.ingestBatchId) await db.update(ugcImageBatches).set({ completedCount: sql`${ugcImageBatches.completedCount} + 1` }).where(eq(ugcImageBatches.id, image.ingestBatchId));
+  } catch (e) {
+    const terminal = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+    if (terminal) {
+      await db.update(ugcImages).set({ status: "failed" }).where(eq(ugcImages.id, image.id));
+      if (image.ingestBatchId) await db.update(ugcImageBatches).set({ failedCount: sql`${ugcImageBatches.failedCount} + 1` }).where(eq(ugcImageBatches.id, image.ingestBatchId));
+    }
+    throw e;
+  } finally {
+    if (image.ingestBatchId) {
+      const [b] = await db.select().from(ugcImageBatches).where(eq(ugcImageBatches.id, image.ingestBatchId)).limit(1);
+      if (b && b.completedCount + b.failedCount >= b.requestedCount && b.status !== "done") await db.update(ugcImageBatches).set({ status: "done", completedAt: new Date() }).where(eq(ugcImageBatches.id, b.id));
+    }
+  }
+}
+
 // ---------------- boot ----------------
 const handlers: Record<string, (job: Job) => Promise<void>> = {
   "profile.analyze": profileAnalyze, "generate.batch": generateBatch, "generate.item": generateItem, "publish.dispatch": publishDispatch, "publish.post": publishPost,
   "metrics.pull": metricsPull, "tokens.refresh": tokensRefresh, "automation.run": automationRun, "automations.tick": automationsTick, "credits.allocate": creditsAllocate, "cleanup": cleanup, "content.recover": recoverStuckContent,
   "render.item": renderItem, "digest.weekly": digestWeekly, "trends.refresh": trendsRefresh, "webhook.deliver": webhookDeliver, "affiliates.settle": affiliatesSettle,
-  "ugc.thumbnail": ugcThumbnail,
+  "ugc.thumbnail": ugcThumbnail, "ugc_image.process": ugcImageProcess,
 };
 // WORKER_ROLE lets the render/ingest queues (ffmpeg/image/video-heavy "content-building" work) run on a
 // separate host (e.g. Railway) from the core queue + all repeatable schedulers (latency/correctness-

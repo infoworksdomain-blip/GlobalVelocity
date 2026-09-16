@@ -17,7 +17,9 @@ const preset = () => (process.env.PROVIDER_MODE === "live" ? "veryfast" : "ultra
 export type RenderCtx = {
   prepaid?: boolean; requestedSeconds?: number; itemId: string; workspaceId: string; accountId: string; format: ContentFormat; profile: CompanyProfileData;
   screenshot: Buffer | null; demoVideo: Buffer | null; character: { id: string; name: string; referenceImages: string[]; voiceId: string | null } | null;
-  clip: { storageKey: string; licenceType: "audio_replace" | "subtitle_only"; durationMs: number } | null; trend: TrendRecipe | null; overlayStyle: OverlayStyle | null;
+  clip: { storageKey: string; licenceType: "audio_replace" | "subtitle_only"; durationMs: number } | null;
+  image: { storageKey: string; thumbnailKey: string | null; width: number | null; height: number | null } | null;
+  trend: TrendRecipe | null; overlayStyle: OverlayStyle | null;
 };
 
 /** Overlay caption beats onto b-roll video (demo video or human UGC clip), cut to the total beat length, muted or with supplied audio. */
@@ -91,6 +93,11 @@ export async function renderMedia(ctx: RenderCtx, copy: Copy): Promise<{ media: 
     catch (e) { if (creditsUsed) await refundCredits(ctx.accountId, creditsUsed, "content_item", ctx.itemId); throw e; }
     if (!mp4) { const charImg = await fetchBuf(ctx.character?.referenceImages[0]); const frame = await R.renderCaptionFrame(copy.hook, brand, ctx.character ? `${ctx.character.name} · AI UGC (preview render)` : "AI UGC (preview render)", charImg ?? ctx.screenshot, ctx.overlayStyle); mp4 = (await R.framesToVideo([{ png: frame, seconds }], audio)).mp4; }
     const fin = await R.finalizeVideo(mp4, R.scriptToSrt(copy.script, seconds * 1000)); await storeVideo(fin.mp4, fin.durationMs);
+  } else if (ctx.format === "human_image") {
+    if (!ctx.image) throw new Error("No licensed UGC image available for this item");
+    // Already stored in our own bucket by the bulk-ingest pipeline -- no transform needed, just reference it.
+    media.image_keys = [ctx.image.storageKey]; media.thumbnail_key = ctx.image.thumbnailKey ?? ctx.image.storageKey;
+    if (ctx.image.width) media.width = ctx.image.width; if (ctx.image.height) media.height = ctx.image.height;
   } else { throw new Error(`Cannot render format ${ctx.format}`); }
   return { media, creditsUsed };
 }

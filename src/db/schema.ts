@@ -144,6 +144,32 @@ export const ugcClips = pgTable("ugc_clips", {
   index("ugc_created_at").on(t.createdAt),
   index("ugc_style_gin").using("gin", t.styleTags),
 ]);
+export const ugcImageBatches = pgTable("ugc_image_batches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdBy: uuid("created_by").references(() => users.id),
+  requestedCount: integer("requested_count").default(0).notNull(),
+  completedCount: integer("completed_count").default(0).notNull(),
+  failedCount: integer("failed_count").default(0).notNull(),
+  status: text("status").$type<"queued" | "running" | "done">().notNull().default("queued"),
+  createdAt: now(), completedAt: ts("completed_at"),
+});
+export const ugcImages = pgTable("ugc_images", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  creatorName: text("creator_name"), gender: text("gender"), styleTags: text("style_tags").array().default([]).notNull(),
+  category: text("category"),
+  setting: text("setting"), width: integer("width"), height: integer("height"),
+  territories: text("territories").array().default(["worldwide"]).notNull(), licenceExpiresAt: ts("licence_expires_at"),
+  storageKey: text("storage_key").notNull(), thumbnailKey: text("thumbnail_key"),
+  tier: text("tier").$type<Plan>().notNull().default("growth"),
+  status: text("status").$type<"processing" | "published" | "failed" | "archived">().notNull().default("published"),
+  ingestBatchId: uuid("ingest_batch_id").references(() => ugcImageBatches.id),
+  createdAt: now(),
+}, (t) => [
+  index("ugc_image_status_tier").on(t.status, t.tier),
+  index("ugc_image_category").on(t.category),
+  index("ugc_image_created_at").on(t.createdAt),
+  index("ugc_image_style_gin").using("gin", t.styleTags),
+]);
 export type Platform = "tiktok" | "instagram" | "youtube" | "linkedin";
 export type TrendRecipe = { structure: { segment: string; seconds: number; text_slot?: string }[]; style: string; sound?: string; why_it_works?: string };
 export const trends = pgTable("trends", {
@@ -172,7 +198,7 @@ export const aiModels = pgTable("ai_models", {
 });
 
 // ---------------- Content ----------------
-export type ContentFormat = "ai_ugc" | "human_ugc" | "slideshow" | "hook_demo" | "meme" | "remix" | "upload";
+export type ContentFormat = "ai_ugc" | "human_ugc" | "human_image" | "slideshow" | "hook_demo" | "meme" | "remix" | "upload";
 export type ContentStatus = "generating" | "candidate" | "skipped" | "saved" | "draft" | "scheduled" | "published" | "failed" | "archived";
 export type ContentMedia = { video_key?: string; image_keys?: string[]; thumbnail_key?: string; duration_ms?: number; width?: number; height?: number };
 export type OverlayPosition = "top" | "center" | "bottom";
@@ -197,7 +223,7 @@ export const contentItems = pgTable("content_items", {
   onScreenText: jsonb("on_screen_text").$type<string[]>().default([]).notNull(),
   caption: text("caption"), hashtags: text("hashtags").array().default([]).notNull(),
   language: text("language").default("en").notNull(),
-  characterId: uuid("character_id").references(() => characters.id), ugcClipId: uuid("ugc_clip_id").references(() => ugcClips.id),
+  characterId: uuid("character_id").references(() => characters.id), ugcClipId: uuid("ugc_clip_id").references(() => ugcClips.id), ugcImageId: uuid("ugc_image_id").references(() => ugcImages.id),
   trendId: uuid("trend_id").references(() => trends.id), templateId: uuid("template_id").references(() => templates.id),
   media: jsonb("media").$type<ContentMedia>().default({}).notNull(),
   overlayStyle: jsonb("overlay_style").$type<OverlayStyle>(),
