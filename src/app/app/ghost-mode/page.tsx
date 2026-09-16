@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery as useConvexQuery } from "convex/react";
+import { api as convexApi } from "@convex/_generated/api";
 import { useMe } from "@/lib/use-me";
 import { api, PLATFORM_LABEL } from "@/lib/api";
 import { useAction, Spinner, Badge } from "@/components/ui";
@@ -49,8 +51,19 @@ export default function GhostMode() {
     });
   }, [workspaceId]);
 
-  // Poll the scan job, same pattern as /app/onboarding
-  useEffect(() => { if (!job || ["done", "failed"].includes(job.status)) return; const t = setTimeout(() => api<{ job: Job }>(`/jobs/${job.id}`).then((r) => setJob(r.job)), 1500); return () => clearTimeout(t); }, [job]);
+  // Live scan progress: Convex if configured (no poll delay), else the same polling pattern as
+  // /app/onboarding. Strictly opt-in -- the wizard works identically either way.
+  const useConvex = !!process.env.NEXT_PUBLIC_CONVEX_URL;
+  const convexProgress = useConvexQuery(convexApi.ghostMode.getByJobId, useConvex && job && !["done", "failed"].includes(job.status) ? { jobId: job.id } : "skip");
+  useEffect(() => {
+    if (!convexProgress || !job) return;
+    setJob({ id: job.id, status: convexProgress.status, progress: { step: convexProgress.step, pct: convexProgress.pct }, error: convexProgress.error ?? null, result: convexProgress.nicheMatch ? { profileId: "", niche_match: convexProgress.nicheMatch as NicheMatch } : job.result });
+  }, [convexProgress, job]);
+  useEffect(() => {
+    if (useConvex || !job || ["done", "failed"].includes(job.status)) return;
+    const t = setTimeout(() => api<{ job: Job }>(`/jobs/${job.id}`).then((r) => setJob(r.job)), 1500);
+    return () => clearTimeout(t);
+  }, [job, useConvex]);
   const selectNiche = useCallback((category: string) => {
     setCategories(category ? [category] : []);
     if (category) api<{ clips: Clip[] }>(`/ugc-clips?category=${encodeURIComponent(category)}`).then((r) => setSample(r.clips.slice(0, 8)));

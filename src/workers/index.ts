@@ -3,6 +3,7 @@ import { Worker, type Job } from "bullmq";
 import { connection, coreQueue, renderQueue, enqueue } from "@/lib/queue";
 import { renderMedia, fetchBuf } from "@/lib/render/pipeline";
 import { thumbnail, store, probeDuration } from "@/lib/render";
+import { pushGhostModeProgress } from "@/lib/convex-server";
 import sharp from "sharp";
 import { sendEmail } from "@/lib/email";
 import { emitEvent, deliver } from "@/lib/webhooks";
@@ -30,11 +31,19 @@ async function notify(workspaceId: string, type: string, title: string, body: st
 // ---------------- profile.analyze ----------------
 async function profileAnalyze(job: Job<{ jobId: string; workspaceId: string; url: string; skipFirstBatch?: boolean }>) {
   const { jobId, workspaceId, url, skipFirstBatch } = job.data;
+  // Convex mirror is GhostMode-only (skipFirstBatch) and strictly additive -- pushGhostModeProgress()
+  // no-ops if CONVEX_URL isn't set, and never throws into this job even if Convex is down.
+  const mirror = (status: string, step: string, pct: number, extra?: { nicheMatch?: unknown; error?: string }) =>
+    skipFirstBatch ? pushGhostModeProgress({ jobId, workspaceId, status, step, pct, ...extra }) : Promise.resolve();
+
   await setJob(jobId, { status: "running", progress: { step: "Reading your site", pct: 10 } });
+  await mirror("running", "Reading your site", 10);
   const crawl = await crawlSite(url);
   await setJob(jobId, { progress: { step: "Understanding your audience", pct: 50 } });
+  await mirror("running", "Understanding your audience", 50);
   const data = await analyzeProfile(crawl);
   await setJob(jobId, { progress: { step: skipFirstBatch ? "Matching your niche" : "Finding your angles", pct: 80 } });
+  await mirror("running", "Matching your niche", 80);
   await db.update(companyProfiles).set({ isCurrent: false }).where(eq(companyProfiles.workspaceId, workspaceId));
   const [{ v }] = await db.select({ v: sql<number>`coalesce(max(version),0)::int` }).from(companyProfiles).where(eq(companyProfiles.workspaceId, workspaceId));
   const [p] = await db.insert(companyProfiles).values({ workspaceId, version: v + 1, isCurrent: true, websiteUrl: crawl.url, data, embedding: profileEmbedding(data), source: "crawl" }).returning();
@@ -48,6 +57,7 @@ async function profileAnalyze(job: Job<{ jobId: string; workspaceId: string; url
     const availableCategories = [...new Set([...clipRows.map((r) => r.category!), ...imageRows.map((r) => r.category!)].filter(Boolean))];
     const nicheMatch = await matchNiche(data, availableCategories);
     await setJob(jobId, { status: "done", progress: { step: "Done", pct: 100 }, result: { profileId: p.id, niche_match: nicheMatch } });
+    await mirror("done", "Done", 100, { nicheMatch });
     return;
   }
 
