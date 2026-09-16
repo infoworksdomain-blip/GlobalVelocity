@@ -28,6 +28,7 @@ export default function GhostMode() {
   const [url, setUrl] = useState(""); const [job, setJob] = useState<Job | null>(null);
   const [source, setSource] = useState<"library" | "generate" | "mixed">("library");
   const [categories, setCategories] = useState<string[]>([]); const [styleTags, setStyleTags] = useState<string[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [sample, setSample] = useState<Clip[]>([]);
   const [cadence, setCadence] = useState(DEFAULT_CADENCE);
   const [socials, setSocials] = useState<Social[]>([]); const [accountIds, setAccountIds] = useState<string[]>([]);
@@ -37,8 +38,10 @@ export default function GhostMode() {
     Promise.all([
       api<{ automations: Auto[] }>(`/workspaces/${workspaceId}/automations`),
       api<{ socials: Social[] }>(`/workspaces/${workspaceId}/socials`),
-    ]).then(async ([a, s]) => {
+      api<{ categories: string[] }>(`/ugc-clips/categories`),
+    ]).then(async ([a, s, c]) => {
       setSocials(s.socials.filter((x) => x.status === "active"));
+      setAvailableCategories(c.categories);
       const gm = a.automations.find((x) => x.kind === "ghost_mode") ?? null;
       setExisting(gm);
       if (gm) setExistingPreview(await api<Preview>(`/automations/${gm.id}/preview`, { method: "POST" }));
@@ -48,14 +51,21 @@ export default function GhostMode() {
 
   // Poll the scan job, same pattern as /app/onboarding
   useEffect(() => { if (!job || ["done", "failed"].includes(job.status)) return; const t = setTimeout(() => api<{ job: Job }>(`/jobs/${job.id}`).then((r) => setJob(r.job)), 1500); return () => clearTimeout(t); }, [job]);
+  const selectNiche = useCallback((category: string) => {
+    setCategories(category ? [category] : []);
+    if (category) api<{ clips: Clip[] }>(`/ugc-clips?category=${encodeURIComponent(category)}`).then((r) => setSample(r.clips.slice(0, 8)));
+    else setSample([]);
+  }, []);
+
   useEffect(() => {
     if (job?.status !== "done" || !job.result) return;
     const nm = job.result.niche_match;
-    setCategories(nm.matched_categories); setStyleTags(nm.suggested_style_tags);
-    setSource(nm.matched_categories.length ? "library" : "generate");
-    if (nm.matched_categories[0]) api<{ clips: Clip[] }>(`/ugc-clips?category=${encodeURIComponent(nm.matched_categories[0])}`).then((r) => setSample(r.clips.slice(0, 8)));
+    setStyleTags(nm.suggested_style_tags);
+    const top = nm.matched_categories.find((c) => availableCategories.includes(c)) ?? "";
+    selectNiche(top);
+    setSource(top ? "library" : "generate");
     setStep("niche");
-  }, [job]);
+  }, [job, availableCategories, selectNiche]);
 
   const startScan = () => run(async () => { const r = await api<{ job_id: string }>(`/workspaces/${workspaceId}/profile`, { method: "POST", json: { url, skip_first_batch: true } }); setJob({ id: r.job_id, status: "queued", progress: { step: "Queued", pct: 0 } }); });
 
@@ -108,11 +118,19 @@ export default function GhostMode() {
           <div className="flex gap-2"><button className={`btn-secondary flex-1 ${source !== "generate" ? "ring-2 ring-brand-500" : ""}`} onClick={() => setSource(categories.length ? "library" : "mixed")}>Use video library</button><button className={`btn-secondary flex-1 ${source === "generate" ? "ring-2 ring-brand-500" : ""}`} onClick={() => setSource("generate")}>AI-generate instead</button></div>
           {source !== "generate" && <>
             <div className="grid grid-cols-2 gap-2">
-              <div><label className="label">Categories</label><input className="input" value={categories.join(",")} onChange={(e) => setCategories(e.target.value.split(",").map((x) => x.trim()).filter(Boolean))} /></div>
+              <div>
+                <label className="label">Niche ({availableCategories.length} in library)</label>
+                {availableCategories.length > 0 ? (
+                  <select className="input" value={categories[0] ?? ""} onChange={(e) => selectNiche(e.target.value)}>
+                    <option value="">Select a niche…</option>
+                    {availableCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                ) : <p className="text-xs text-slate-400 py-2.5">No niches in the library yet — switch to AI-generate.</p>}
+              </div>
               <div><label className="label">Style tags</label><input className="input" value={styleTags.join(",")} onChange={(e) => setStyleTags(e.target.value.split(",").map((x) => x.trim()).filter(Boolean))} /></div>
             </div>
             {sample.length > 0 && <div><label className="label">Sample clips</label><div className="grid grid-cols-4 gap-2">{sample.map((c) => c.thumbnailUrl && <img key={c.id} src={c.thumbnailUrl} className="rounded-lg aspect-[9/16] object-cover" alt="" />)}</div></div>}
-            {sample.length === 0 && <p className="text-xs text-slate-400">No sample clips found for these categories yet — you can still continue, or switch to AI-generate.</p>}
+            {sample.length === 0 && categories.length > 0 && <p className="text-xs text-slate-400">No sample clips found for this niche yet — you can still continue, or switch to AI-generate.</p>}
           </>}
           <div className="flex justify-end"><button className="btn-primary" onClick={() => setStep("cadence")}>Continue</button></div>
         </div>
