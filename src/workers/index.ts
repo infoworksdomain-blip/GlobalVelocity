@@ -361,24 +361,37 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
   "render.item": renderItem, "digest.weekly": digestWeekly, "trends.refresh": trendsRefresh, "webhook.deliver": webhookDeliver, "affiliates.settle": affiliatesSettle,
   "ugc.thumbnail": ugcThumbnail,
 };
+// WORKER_ROLE lets the render/ingest queues (ffmpeg/image/video-heavy "content-building" work) run on a
+// separate host (e.g. Railway) from the core queue + all repeatable schedulers (latency/correctness-
+// sensitive: publish-dispatch, automations-tick, tokens-refresh, etc), which stay on the primary host.
+// Default "all" preserves today's single-process behavior with zero config change.
+const workerRole = process.env.WORKER_ROLE ?? "all";
+const runsCore = workerRole === "all" || workerRole === "core";
+const runsRender = workerRole === "all" || workerRole === "render";
+
 async function main() {
-  await coreQueue.upsertJobScheduler("publish-dispatch", { every: 60_000 }, { name: "publish.dispatch" });
-  await coreQueue.upsertJobScheduler("tokens-refresh", { every: 3_600_000 }, { name: "tokens.refresh" });
-  await coreQueue.upsertJobScheduler("automations-tick", { every: 600_000 }, { name: "automations.tick" });
-  await coreQueue.upsertJobScheduler("cleanup", { every: 86_400_000 }, { name: "cleanup" });
-  await coreQueue.upsertJobScheduler("content-recover", { every: 600_000 }, { name: "content.recover" });
-  await coreQueue.upsertJobScheduler("trends-refresh", { every: 6 * 3_600_000 }, { name: "trends.refresh" });
-  await coreQueue.upsertJobScheduler("digest-weekly", { pattern: "0 8 * * 1" }, { name: "digest.weekly" });
-  await coreQueue.upsertJobScheduler("affiliates-settle", { every: 86_400_000 }, { name: "affiliates.settle" });
+  if (runsCore) {
+    await coreQueue.upsertJobScheduler("publish-dispatch", { every: 60_000 }, { name: "publish.dispatch" });
+    await coreQueue.upsertJobScheduler("tokens-refresh", { every: 3_600_000 }, { name: "tokens.refresh" });
+    await coreQueue.upsertJobScheduler("automations-tick", { every: 600_000 }, { name: "automations.tick" });
+    await coreQueue.upsertJobScheduler("cleanup", { every: 86_400_000 }, { name: "cleanup" });
+    await coreQueue.upsertJobScheduler("content-recover", { every: 600_000 }, { name: "content.recover" });
+    await coreQueue.upsertJobScheduler("trends-refresh", { every: 6 * 3_600_000 }, { name: "trends.refresh" });
+    await coreQueue.upsertJobScheduler("digest-weekly", { pattern: "0 8 * * 1" }, { name: "digest.weekly" });
+    await coreQueue.upsertJobScheduler("affiliates-settle", { every: 86_400_000 }, { name: "affiliates.settle" });
+  }
   const run = async (job: Job) => { const h = handlers[job.name]; if (!h) throw new Error(`No handler for ${job.name}`); await h(job); };
   const wire = (w: Worker, tag: string) => { w.on("failed", (job, e) => console.error(`[${tag}] ${job?.name} ${job?.id} failed:`, e.message)); w.on("completed", (job) => { if (job.name !== "publish.dispatch" && job.name !== "automations.tick") console.log(`[${tag}] ${job.name} ${job.id} done`); }); };
-  const core = new Worker("velocity-core", run, { connection, concurrency: Number(process.env.CORE_CONCURRENCY ?? 8) }); wire(core, "core");
-  const render = new Worker("velocity-render", run, { connection, concurrency: Number(process.env.WORKER_CONCURRENCY ?? 3), lockDuration: 180_000 }); wire(render, "render");
-  const ingest = new Worker("velocity-ingest", run, { connection, concurrency: Number(process.env.INGEST_CONCURRENCY ?? 4) }); wire(ingest, "ingest");
-  const shutdown = async (sig: string) => { console.log(`[worker] ${sig} — finishing in-flight jobs`); await Promise.all([core.close(), render.close(), ingest.close()]); process.exit(0); };
+  const workers: Worker[] = [];
+  if (runsCore) { const core = new Worker("velocity-core", run, { connection, concurrency: Number(process.env.CORE_CONCURRENCY ?? 8) }); wire(core, "core"); workers.push(core); }
+  if (runsRender) {
+    const render = new Worker("velocity-render", run, { connection, concurrency: Number(process.env.WORKER_CONCURRENCY ?? 3), lockDuration: 180_000 }); wire(render, "render"); workers.push(render);
+    const ingest = new Worker("velocity-ingest", run, { connection, concurrency: Number(process.env.INGEST_CONCURRENCY ?? 4) }); wire(ingest, "ingest"); workers.push(ingest);
+  }
+  const shutdown = async (sig: string) => { console.log(`[worker] ${sig} — finishing in-flight jobs`); await Promise.all(workers.map((w) => w.close())); process.exit(0); };
   process.on("SIGTERM", () => shutdown("SIGTERM")); process.on("SIGINT", () => shutdown("SIGINT"));
   void renderQueue;
-  console.log("worker started (mode:", process.env.PROVIDER_MODE ?? "mock", ")");
+  console.log("worker started (mode:", process.env.PROVIDER_MODE ?? "mock", ", role:", workerRole, ")");
 }
 main().catch((e) => { console.error(e); process.exit(1); });
 export { generateBatch, generateItem };
