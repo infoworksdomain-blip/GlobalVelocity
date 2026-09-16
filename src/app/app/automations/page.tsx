@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMe } from "@/lib/use-me";
 import { api, PLATFORM_LABEL, FORMAT_LABEL } from "@/lib/api";
-import { useAction, Spinner, Badge, statusTone, Modal, Empty } from "@/components/ui";
+import { useAction, SkeletonRows, Badge, statusTone, Modal, Empty } from "@/components/ui";
 import { SchedulePicker } from "@/components/schedule-picker";
 type Auto = { id: string; name: string; mode: string; approval: string; status: string; kind?: string; lastRunAt: string | null; nextRunAt: string | null; config: Record<string, unknown> & { social_account_ids: string[]; posts_per_day: number; horizon_days: number; times: string[]; weekdays: number[]; format_mix: Record<string, number>; source: string; min_spacing_minutes: number; max_per_platform_per_day: number; ugc_categories?: string[]; ugc_style_tags?: string[] } };
 type Social = { id: string; platform: string; handle: string | null; status: string };
@@ -22,7 +22,7 @@ export default function Automations() {
     <div>{wall}
       <div className="flex items-center justify-between"><h1 className="text-2xl font-extrabold">Automations</h1><button className="btn-primary" onClick={() => setOpen(true)} disabled={!me?.plan.limits.scheduling}>+ New automation</button></div>
       {!me?.plan.limits.scheduling && <p className="mt-2 text-sm text-[var(--color-warning)]">Automations need a paid plan for scheduling.</p>}
-      {!autos ? <div className="py-20 grid place-items-center"><Spinner /></div> : autos.length === 0 ? <div className="mt-6"><Empty title="No automations yet" body="Set a cadence and format mix; Velocity fills your calendar automatically." /></div> : (
+      {!autos ? <div className="mt-4"><SkeletonRows rows={3} /></div> : autos.length === 0 ? <div className="mt-6"><Empty title="No automations yet" body="Set a cadence and format mix; Velocity fills your calendar automatically." /></div> : (
         <div className="mt-4 grid gap-3">{autos.map((a) => <div key={a.id} className="card p-4 flex flex-wrap items-center gap-3">
           <div className="flex-1"><div className="flex items-center gap-2"><span className="font-semibold">{a.name}</span>{a.kind === "ghost_mode" && <Badge tone="brand">Ghost Mode</Badge>}<Badge tone={statusTone(a.status)}>{a.status}</Badge><Badge>{a.mode === "continuous" ? "continuous" : "one-shot"}</Badge><Badge>{a.approval === "auto" ? "auto-publish" : a.approval === "blitz" ? "approve in Velocity mode" : "approve in Calendar"}</Badge></div>
             <div className="text-xs text-[var(--color-muted)] mt-1">{a.config.posts_per_day}/day · {a.config.horizon_days} days · {a.config.times.join(", ")} · {a.config.social_account_ids.length} accounts · last run {a.lastRunAt ? new Date(a.lastRunAt).toLocaleString() : "never"}</div></div>
@@ -51,7 +51,7 @@ export default function Automations() {
         <div className="md:col-span-2 flex justify-end gap-2"><button className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button><button className="btn-primary" disabled={busy || f.config.social_account_ids.length === 0} onClick={create}>Create & preview</button></div>
       </div></Modal>
       <Modal open={!!preview} onClose={() => setPreview(null)} title="Preview">{preview && <div className="text-sm space-y-2"><p><b>{preview.slots}</b> posts will be scheduled; <b>{preview.will_generate}</b> new pieces generated ({preview.library_items_available} available in library).</p>{preview.library_clips_available !== null && <p>{preview.library_clips_available} UGC clips match your library targeting filters.</p>}<p>Saves: {preview.saves_used}/{preview.saves_limit ?? "∞"}.</p>{preview.warnings.map((w) => <p key={w} className="text-[var(--color-warning)]">⚠ {w}</p>)}</div>}</Modal>
-      <Modal open={!!detail} onClose={() => setDetail(null)} title="Run log">{detail && (detail.runs.length === 0 ? <p className="text-sm text-[var(--color-muted)]">No runs yet.</p> : <table className="w-full text-sm"><thead><tr className="text-left"><th>Started</th><th>Status</th><th>Gen</th><th>Sched</th><th>Skip</th></tr></thead><tbody>{detail.runs.map((r) => <tr key={r.id} className="border-t"><td className="py-1">{new Date(r.startedAt).toLocaleString()}</td><td><Badge tone={statusTone(r.status)}>{r.status}</Badge></td><td>{r.generated}</td><td>{r.scheduled}</td><td>{r.skipped}{r.errors.length > 0 && <span className="text-[var(--color-danger)]" title={r.errors.join("\n")}> ⚠</span>}</td></tr>)}</tbody></table>)}</Modal>
+      <Modal open={!!detail} onClose={() => setDetail(null)} title="Run log">{detail && (detail.runs.length === 0 ? <p className="text-sm text-[var(--color-muted)]">No runs yet.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left"><th>Started</th><th>Status</th><th>Gen</th><th>Sched</th><th>Skip</th></tr></thead><tbody>{detail.runs.map((r) => <tr key={r.id} className="border-t"><td className="py-1">{new Date(r.startedAt).toLocaleString()}</td><td><Badge tone={statusTone(r.status)}>{r.status}</Badge></td><td>{r.generated}</td><td>{r.scheduled}</td><td>{r.skipped}{r.errors.length > 0 && <span className="text-[var(--color-danger)]" title={r.errors.join("\n")}> ⚠</span>}</td></tr>)}</tbody></table></div>)}</Modal>
     </div>
   );
 }

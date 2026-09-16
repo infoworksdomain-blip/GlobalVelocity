@@ -102,3 +102,6 @@ body { @apply bg-[var(--color-ink)] text-[var(--color-text)] antialiased; font-f
 @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .swipe-right { animation: swipe-out-right .35s ease-in forwards; } .swipe-left { animation: swipe-out-left .35s ease-in forwards; }
 .fade-up { animation: fade-up .35s ease-out both; }
+@keyframes skeleton-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.skeleton { border-radius: .5rem; background: var(--color-surface-3); animation: skeleton-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; opacity: .7; } }

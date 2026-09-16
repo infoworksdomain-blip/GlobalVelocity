@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useMe } from "@/lib/use-me";
 import { api, FORMAT_LABEL } from "@/lib/api";
-import { useAction, Spinner, Badge, statusTone, Empty } from "@/components/ui";
+import { useAction, SkeletonCards, Badge, statusTone, Empty } from "@/components/ui";
 import { MediaPreview, type Item } from "@/components/media";
 import { ScheduleModal } from "@/components/modals";
 type Social = { id: string; platform: string; handle: string | null; status: string };
@@ -28,7 +28,7 @@ export default function Library() {
         <div className="ml-auto flex gap-1"><button className={`btn-ghost ${view === "grid" ? "bg-[var(--color-surface-2)]" : ""}`} onClick={() => setView("grid")}>▦</button><button className={`btn-ghost ${view === "list" ? "bg-[var(--color-surface-2)]" : ""}`} onClick={() => setView("list")}>☰</button></div>
       </div>
       {sel.length > 0 && <div className="mt-3 card p-3 flex items-center gap-3 text-sm"><span>{sel.length} selected</span><button className="btn-danger" onClick={bulkDelete}>Delete</button><button className="btn-ghost" onClick={() => setSel([])}>Clear</button></div>}
-      {loading && items.length === 0 ? <div className="py-20 grid place-items-center"><Spinner /></div> : items.length === 0 ? <div className="mt-6"><Empty title="Nothing here yet" body="Keep items in Velocity mode to build your library." action={<Link href="/app/velocity" className="btn-primary">Open Velocity mode</Link>} /></div> : view === "grid" ? (
+      {loading && items.length === 0 ? <div className="mt-4"><SkeletonCards count={6} /></div> : items.length === 0 ? <div className="mt-6"><Empty title="Nothing here yet" body="Keep items in Velocity mode to build your library." action={<Link href="/app/velocity" className="btn-primary">Open Velocity mode</Link>} /></div> : view === "grid" ? (
         <div className="mt-4 grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-5">{items.map((i) => <div key={i.id} className="card overflow-hidden group relative">
           <input type="checkbox" className="absolute top-2 left-2 z-10 h-4 w-4" checked={sel.includes(i.id)} onChange={() => setSel(sel.includes(i.id) ? sel.filter((x) => x !== i.id) : [...sel, i.id])} />
           <Link href={`/app/content/${i.id}`}><MediaPreview item={i} className="rounded-none" /></Link>
@@ -36,7 +36,7 @@ export default function Library() {
             <div className="mt-2 flex gap-1 opacity-0 group-hover:opacity-100 transition"><button className="btn-secondary px-2 py-1 text-xs" onClick={() => setSchedItem(i)}>Schedule</button><button className="btn-ghost px-2 py-1 text-xs" onClick={() => download(i)}>↓</button></div></div>
         </div>)}</div>
       ) : (
-        <div className="mt-4 card overflow-hidden"><table className="w-full text-sm"><thead className="bg-[var(--color-surface-2)] text-left"><tr><th className="p-3 w-8"></th><th className="p-3">Hook</th><th className="p-3">Format</th><th className="p-3">Status</th><th className="p-3">Created</th><th className="p-3"></th></tr></thead><tbody>{items.map((i) => <tr key={i.id} className="border-t border-[var(--color-hairline)]"><td className="p-3"><input type="checkbox" checked={sel.includes(i.id)} onChange={() => setSel(sel.includes(i.id) ? sel.filter((x) => x !== i.id) : [...sel, i.id])} /></td><td className="p-3"><Link href={`/app/content/${i.id}`} className="font-medium hover:underline">{i.hook}</Link></td><td className="p-3">{FORMAT_LABEL[i.format]}</td><td className="p-3"><Badge tone={statusTone(i.status)}>{i.status}</Badge></td><td className="p-3 text-[var(--color-muted)]">{new Date(i.created_at).toLocaleDateString()}</td><td className="p-3"><button className="btn-secondary px-2 py-1 text-xs" onClick={() => setSchedItem(i)}>Schedule</button></td></tr>)}</tbody></table></div>
+        <div className="mt-4 card overflow-hidden overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[var(--color-surface-2)] text-left"><tr><th className="p-3 w-8"></th><th className="p-3">Hook</th><th className="p-3">Format</th><th className="p-3">Status</th><th className="p-3">Created</th><th className="p-3"></th></tr></thead><tbody>{items.map((i) => <tr key={i.id} className="border-t border-[var(--color-hairline)]"><td className="p-3"><input type="checkbox" checked={sel.includes(i.id)} onChange={() => setSel(sel.includes(i.id) ? sel.filter((x) => x !== i.id) : [...sel, i.id])} /></td><td className="p-3"><Link href={`/app/content/${i.id}`} className="font-medium hover:underline">{i.hook}</Link></td><td className="p-3">{FORMAT_LABEL[i.format]}</td><td className="p-3"><Badge tone={statusTone(i.status)}>{i.status}</Badge></td><td className="p-3 text-[var(--color-muted)]">{new Date(i.created_at).toLocaleDateString()}</td><td className="p-3"><button className="btn-secondary px-2 py-1 text-xs" onClick={() => setSchedItem(i)}>Schedule</button></td></tr>)}</tbody></table></div>
       )}
       {cursor && <div className="mt-4 text-center"><button className="btn-secondary" onClick={() => load(true)} disabled={loading}>Load more</button></div>}
       <ScheduleModal item={schedItem} socials={socials} viaSwipe={false} onClose={() => setSchedItem(null)} onDone={() => { setSchedItem(null); load(); }} />
