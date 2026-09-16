@@ -2,7 +2,7 @@ import type { Plan } from "@/db/schema";
 
 // Single source of truth for pricing and entitlements. Marketing pricing, paywalls and the
 // entitlement service all read from here (FR-18.2). Values marked † are design decisions.
-export const CREDIT_TARIFF = { image: 4, videoPerSecond: 10 } as const;
+export const CREDIT_TARIFF = { image: 4, videoPerSecond: 10, imageBgRemove: 2, imageInpaint: 3, imageUpscale: 2 } as const;
 export const YEARLY_DISCOUNT = 0.2;
 
 export type PlanDef = {

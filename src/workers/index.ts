@@ -15,7 +15,9 @@ import { moderateText, currentModelLabel } from "@/lib/llm";
 import { publicUrl } from "@/lib/storage";
 import { getPublisher } from "@/lib/publishers";
 import { decrypt, encrypt } from "@/lib/crypto";
-import { canUseCharacterTier, assertCanSave } from "@/lib/tenancy";
+import { canUseCharacterTier, assertCanSave, refundCredits } from "@/lib/tenancy";
+import { snapshotVersion } from "@/lib/content";
+import { removeBackground, inpaint, upscaleImage } from "@/lib/render/image-edit";
 import { PLANS, PLAN_ORDER, tierRank } from "@/lib/plans";
 import { planAutomation } from "@/lib/automations";
 import type { ContentFormat, Plan } from "@/db/schema";
@@ -407,12 +409,45 @@ async function ugcImageProcess(job: Job<{ imageId: string }>) {
   }
 }
 
+// ---------------- image.ai_edit ----------------
+/** AI-powered image edits (bg removal/inpaint/upscale) -- real fal.ai queue-API calls, so this runs on the
+ *  render queue like render.item, not inline in the API route. Mirrors renderItem()'s job-status + credit-
+ *  refund-on-final-failure shape. */
+async function imageAiEdit(job: Job<{ itemId: string; jobId: string; op: "bg_remove" | "inpaint" | "upscale"; maskKey?: string; accountId: string; creditsUsed: number }>) {
+  const { itemId, jobId, op, maskKey, accountId, creditsUsed } = job.data;
+  const item = await db.query.contentItems.findFirst({ where: eq(contentItems.id, itemId) });
+  if (!item) { await setJob(jobId, { status: "failed", error: "Content item no longer exists" }); return; }
+  try {
+    await setJob(jobId, { status: "running", progress: { step: "Processing", pct: 30 } });
+    const srcKey = item.media.image_keys?.[0]; if (!srcKey) throw new Error("This item has no image to edit");
+    const srcBuf = await fetchBuf(publicUrl(srcKey)); if (!srcBuf) throw new Error("Source image not readable");
+    const outBuf = op === "bg_remove" ? await removeBackground(srcBuf)
+      : op === "upscale" ? await upscaleImage(srcBuf)
+      : await inpaint(srcBuf, (await fetchBuf(publicUrl(maskKey))) ?? Buffer.alloc(0));
+    const meta = await sharp(outBuf).metadata();
+    const outKey = await store(`ws/${item.workspaceId}/content/${item.id}/edit-${Date.now()}.png`, outBuf, "image/png");
+
+    await snapshotVersion(item);
+    const wasThumbnail = item.media.thumbnail_key === srcKey;
+    await db.update(contentItems).set({
+      media: { ...item.media, image_keys: [outKey], thumbnail_key: wasThumbnail ? outKey : item.media.thumbnail_key, width: meta.width ?? item.media.width, height: meta.height ?? item.media.height },
+      provenance: { ...item.provenance, image_edits: [...((item.provenance as { image_edits?: unknown[] }).image_edits ?? []), { edited_at: new Date().toISOString(), op, credits_consumed: creditsUsed }] },
+      updatedAt: new Date(),
+    }).where(eq(contentItems.id, item.id));
+    await setJob(jobId, { status: "done", progress: { step: "Done", pct: 100 }, result: { itemId: item.id } });
+  } catch (e) {
+    await setJob(jobId, { status: "failed", error: String(e).slice(0, 500) });
+    if (job.attemptsMade + 1 >= (job.opts.attempts ?? 1) && creditsUsed) await refundCredits(accountId, creditsUsed, "content_item", item.id);
+    throw e;
+  }
+}
+
 // ---------------- boot ----------------
 const handlers: Record<string, (job: Job) => Promise<void>> = {
   "profile.analyze": profileAnalyze, "generate.batch": generateBatch, "generate.item": generateItem, "publish.dispatch": publishDispatch, "publish.post": publishPost,
   "metrics.pull": metricsPull, "tokens.refresh": tokensRefresh, "automation.run": automationRun, "automations.tick": automationsTick, "credits.allocate": creditsAllocate, "cleanup": cleanup, "content.recover": recoverStuckContent,
   "render.item": renderItem, "digest.weekly": digestWeekly, "trends.refresh": trendsRefresh, "webhook.deliver": webhookDeliver, "affiliates.settle": affiliatesSettle,
-  "ugc.thumbnail": ugcThumbnail, "ugc_image.process": ugcImageProcess,
+  "ugc.thumbnail": ugcThumbnail, "ugc_image.process": ugcImageProcess, "image.ai_edit": imageAiEdit,
 };
 // WORKER_ROLE lets the render/ingest queues (ffmpeg/image/video-heavy "content-building" work) run on a
 // separate host (e.g. Railway) from the core queue + all repeatable schedulers (latency/correctness-

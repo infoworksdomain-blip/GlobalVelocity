@@ -7,12 +7,13 @@ import { useAction, Spinner, Badge, statusTone } from "@/components/ui";
 import { MediaPreview, type Item } from "@/components/media";
 import { EditModal, ScheduleModal } from "@/components/modals";
 import { TimelineEditor } from "@/components/timeline-editor";
+import { ImageEditModal } from "@/components/image-edit-modal";
 import { useMe } from "@/lib/use-me";
 type Detail = Item & { versions: { id: string; version: number; snapshot: Record<string, unknown>; createdAt: string }[]; scheduled_posts: { id: string; status: string; scheduledAt: string; permalink: string | null; platform: string; handle: string | null }[]; latest_metrics: { views: number; likes: number; comments: number; shares: number } | null; provenance: Record<string, unknown> };
 type Social = { id: string; platform: string; handle: string | null; status: string };
 export default function ContentDetail() {
   const { id } = useParams<{ id: string }>(); const router = useRouter(); const { workspaceId, refresh } = useMe(); const { run, wall } = useAction();
-  const [item, setItem] = useState<Detail | null>(null); const [editing, setEditing] = useState(false); const [timeline, setTimeline] = useState(false); const [sched, setSched] = useState(false); const [socials, setSocials] = useState<Social[]>([]);
+  const [item, setItem] = useState<Detail | null>(null); const [editing, setEditing] = useState(false); const [timeline, setTimeline] = useState(false); const [sched, setSched] = useState(false); const [imgEdit, setImgEdit] = useState(false); const [socials, setSocials] = useState<Social[]>([]);
   const load = () => api<{ item: Detail }>(`/content/${id}`).then((r) => setItem(r.item));
   const [rerendering, setRerendering] = useState(false);
   const rerender = () => run(async () => { const { job_id } = await api<{ job_id: string }>(`/content/${id}/rerender`, { method: "POST" }); setRerendering(true); const poll = async () => { const { job } = await api<{ job: { status: string; error?: string } }>(`/jobs/${job_id}`); if (job.status === "done") { setRerendering(false); load(); } else if (job.status === "failed") { setRerendering(false); throw new Error(job.error ?? "Render failed"); } else setTimeout(poll, 2000); }; await poll(); }, "Re-render queued");
@@ -22,7 +23,7 @@ export default function ContentDetail() {
   const m = item.latest_metrics;
   return (
     <div className="grid gap-6 md:grid-cols-[340px_1fr]">{wall}
-      <div><MediaPreview item={item} /><div className="mt-3 flex flex-wrap gap-2"><button className="btn-primary" onClick={() => setSched(true)}>Schedule</button><button className="btn-secondary" onClick={() => setEditing(true)}>Edit</button><button className="btn-secondary" onClick={() => setTimeline(true)}>Timeline</button><button className="btn-secondary" disabled={rerendering} onClick={rerender}>{rerendering ? "Rendering…" : "Re-render"}</button><button className="btn-secondary" onClick={() => run(async () => { const r = await api<{ url: string }>(`/content/${id}?download=1`); window.open(r.url, "_blank"); })}>Download</button><button className="btn-secondary" onClick={() => run(() => api(`/content/${id}/similar`, { method: "POST", json: { count: 5 } }), "Generating 5 similar — check Velocity mode")}>Generate similar</button><button className="btn-secondary" onClick={() => run(async () => { await api(`/content/${id}?action=duplicate`, { method: "POST" }); refresh(); }, "Duplicated")}>Duplicate</button><button className="btn-danger" onClick={() => run(async () => { await api(`/content/${id}`, { method: "DELETE" }); refresh(); router.push("/app/content"); })}>Delete</button></div></div>
+      <div><MediaPreview item={item} /><div className="mt-3 flex flex-wrap gap-2"><button className="btn-primary" onClick={() => setSched(true)}>Schedule</button><button className="btn-secondary" onClick={() => setEditing(true)}>Edit</button><button className="btn-secondary" onClick={() => setTimeline(true)}>Timeline</button>{item.media.image_urls.filter(Boolean).length > 0 && <button className="btn-secondary" onClick={() => setImgEdit(true)}>Edit image</button>}<button className="btn-secondary" disabled={rerendering} onClick={rerender}>{rerendering ? "Rendering…" : "Re-render"}</button><button className="btn-secondary" onClick={() => run(async () => { const r = await api<{ url: string }>(`/content/${id}?download=1`); window.open(r.url, "_blank"); })}>Download</button><button className="btn-secondary" onClick={() => run(() => api(`/content/${id}/similar`, { method: "POST", json: { count: 5 } }), "Generating 5 similar — check Velocity mode")}>Generate similar</button><button className="btn-secondary" onClick={() => run(async () => { await api(`/content/${id}?action=duplicate`, { method: "POST" }); refresh(); }, "Duplicated")}>Duplicate</button><button className="btn-danger" onClick={() => run(async () => { await api(`/content/${id}`, { method: "DELETE" }); refresh(); router.push("/app/content"); })}>Delete</button></div></div>
       <div className="space-y-4">
         <div className="flex gap-2 items-center"><Badge tone="brand">{FORMAT_LABEL[item.format]}</Badge><Badge tone={statusTone(item.status)}>{item.status}</Badge>{item.character && <Badge>{item.character.name}</Badge>}</div>
         <h1 className="text-2xl font-extrabold">{item.hook}</h1>
@@ -35,6 +36,7 @@ export default function ContentDetail() {
       </div>
       <TimelineEditor item={timeline ? item : null} provenance={item.provenance} onClose={() => setTimeline(false)} onDone={() => { setTimeline(false); load(); }} />
       <EditModal item={editing ? item : null} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />
+      <ImageEditModal item={imgEdit ? item : null} workspaceId={workspaceId ?? ""} onClose={() => setImgEdit(false)} onDone={() => { setImgEdit(false); load(); }} />
       <ScheduleModal item={sched ? item : null} socials={socials} viaSwipe={false} onClose={() => setSched(false)} onDone={() => { setSched(false); load(); }} />
     </div>
   );

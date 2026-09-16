@@ -24,12 +24,12 @@ export const W = 1080, H = 1920;
 /** Full SVG-safe escape -- required for any value placed inside a quoted attribute, not just element content. */
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 /** Greedy word-wrap for SVG text. */
-function wrap(text: string, maxChars: number) {
+export function wrap(text: string, maxChars: number) {
   const words = text.split(/\s+/); const lines: string[] = []; let cur = "";
   for (const w of words) { if ((cur + " " + w).trim().length > maxChars) { if (cur) lines.push(cur); cur = w; } else cur = (cur + " " + w).trim(); }
   if (cur) lines.push(cur); return lines;
 }
-function textBlock(lines: string[], x: number, y: number, size: number, opts: { weight?: number; fill?: string; anchor?: string; lineHeight?: number; stroke?: boolean; fontFamily?: string } = {}) {
+export function textBlock(lines: string[], x: number, y: number, size: number, opts: { weight?: number; fill?: string; anchor?: string; lineHeight?: number; stroke?: boolean; fontFamily?: string } = {}) {
   const lh = opts.lineHeight ?? size * 1.15;
   return lines.map((l, i) => `<text x="${x}" y="${y + i * lh}" font-family="${esc(opts.fontFamily ?? "DejaVu Sans, Arial, sans-serif")}" font-size="${size}" font-weight="${opts.weight ?? 800}" fill="${opts.fill ?? "#fff"}" text-anchor="${opts.anchor ?? "middle"}" ${opts.stroke ? 'stroke="#000" stroke-width="10" paint-order="stroke"' : ""}>${esc(l)}</text>`).join("");
 }
