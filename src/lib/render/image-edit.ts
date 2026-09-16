@@ -65,7 +65,7 @@ async function falQueueSubmitPollFetch(model: string, input: Record<string, unkn
     const s = await fetch(status_url, { headers: { Authorization: `Key ${key}` } });
     if (!s.ok) continue;
     const j = await s.json() as { status?: string };
-    if (j.status === "COMPLETED") { const r = await fetch(response_url, { headers: { Authorization: `Key ${key}` } }); if (!r.ok) throw new Error(`fal.ai result fetch failed ${r.status}`); return r.json() as Promise<{ image?: { url?: string } }>; }
+    if (j.status === "COMPLETED") { const r = await fetch(response_url, { headers: { Authorization: `Key ${key}` } }); if (!r.ok) throw new Error(`fal.ai result fetch failed ${r.status}: ${(await r.text()).slice(0, 300)}`); return r.json() as Promise<{ image?: { url?: string } }>; }
     if (j.status === "ERROR" || j.status === "FAILED") throw new Error(`fal.ai op failed: ${JSON.stringify(j)}`);
   }
   throw new Error(`fal.ai op did not complete within ${AI_POLL_TIMEOUT_MS / 1000}s`);
@@ -93,7 +93,13 @@ export async function removeBackground(buf: Buffer): Promise<Buffer> {
 }
 export async function inpaint(buf: Buffer, maskBuf: Buffer): Promise<Buffer> {
   if (live()) {
-    const [srcUrl, maskUrl] = await Promise.all([stageForFal(buf), stageForFal(maskBuf)]);
+    // The mask is drawn client-side against a fixed-resolution canvas, independent of the source
+    // image's actual dimensions (which vary per item and change after prior edits/upscales) -- fal.ai's
+    // inpainting model rejects a mask whose dimensions don't match the image (verified live: 422), so
+    // always resize the mask to match here rather than trusting the client to send a matching size.
+    const meta = await sharp(buf).metadata();
+    const resizedMask = await sharp(maskBuf).resize(meta.width, meta.height, { fit: "fill" }).toBuffer();
+    const [srcUrl, maskUrl] = await Promise.all([stageForFal(buf), stageForFal(resizedMask)]);
     const j = await falQueueSubmitPollFetch(FAL_INPAINT_MODEL, { image_url: srcUrl, mask_url: maskUrl });
     if (!j.image?.url) throw new Error("fal.ai inpaint returned no image");
     return sharp(Buffer.from(await (await fetch(j.image.url)).arrayBuffer())).png().toBuffer();
