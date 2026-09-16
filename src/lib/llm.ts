@@ -28,7 +28,10 @@ async function completeOpenAIText(system: string, user: string, maxTokens: numbe
   const res = await openai().responses.create({
     model: process.env.OPENAI_MODEL || "gpt-5", max_output_tokens: maxTokens,
     instructions: system + JSON_ONLY_SUFFIX,
-    input: user,
+    // The Responses API's json_object format requires the word "json" in the input itself, not just
+    // instructions -- verified live: real prompts (crawl text, etc) never contain it and get a 400
+    // ("Response input messages must contain the word 'json'...") without this suffix.
+    input: user + JSON_ONLY_SUFFIX,
     text: { format: { type: "json_object" } },
   });
   return res.output_text;
