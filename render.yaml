@@ -52,7 +52,7 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: LLM_PROVIDER
-        value: anthropic      # anthropic | openai
+        value: openai          # openai | anthropic -- primary provider; automatic fallback to the other if it errors
       - key: OPENAI_API_KEY
         sync: false
       - key: IMAGE_PROVIDER_URL

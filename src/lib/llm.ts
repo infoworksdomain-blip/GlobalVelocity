@@ -2,11 +2,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { z } from "zod";
 
-/** Provider-abstracted LLM helper. PROVIDER_MODE=mock (or no key for the selected provider) returns deterministic fixtures so the whole loop runs offline. */
-const llmProvider = () => (process.env.LLM_PROVIDER === "openai" ? "openai" : "anthropic");
-export const isMock = () =>
-  process.env.PROVIDER_MODE !== "live" ||
-  (llmProvider() === "anthropic" ? !process.env.ANTHROPIC_API_KEY : !process.env.OPENAI_API_KEY);
+/** Provider-abstracted LLM helper with automatic failover. PROVIDER_MODE=mock (or no key for any
+ * eligible provider) returns deterministic fixtures so the whole loop runs offline. Default order is
+ * openai (primary) -> anthropic (backup); set LLM_PROVIDER=anthropic to swap which one is primary. */
+type LlmProviderName = "openai" | "anthropic";
+const primaryProvider = (): LlmProviderName => (process.env.LLM_PROVIDER === "anthropic" ? "anthropic" : "openai");
+const hasKey = (p: LlmProviderName) => !!process.env[p === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"];
+const providerOrder = (): LlmProviderName[] => {
+  const primary = primaryProvider(); const backup: LlmProviderName = primary === "openai" ? "anthropic" : "openai";
+  return [primary, backup].filter(hasKey);
+};
+export const isMock = () => process.env.PROVIDER_MODE !== "live" || providerOrder().length === 0;
 
 let anthropicClient: Anthropic | null = null;
 const anthropic = () => (anthropicClient ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
@@ -37,15 +43,25 @@ async function completeOpenAIText(system: string, user: string, maxTokens: numbe
   return res.output_text;
 }
 
-/** Model label for provenance stamping -- "mock" unless actually running live. */
-export const currentModelLabel = () => (isMock() ? "mock" : llmProvider() === "openai" ? process.env.OPENAI_MODEL || "gpt-5" : process.env.ANTHROPIC_MODEL || "claude-sonnet-5");
+const modelFor = (p: LlmProviderName) => (p === "openai" ? process.env.OPENAI_MODEL || "gpt-5" : process.env.ANTHROPIC_MODEL || "claude-sonnet-5");
+/** Model label for provenance stamping -- "mock" unless actually running live. Best-effort: reports the primary provider's model, not necessarily which one served any specific past call (see completeJson's fallback). */
+export const currentModelLabel = () => (isMock() ? "mock" : modelFor(providerOrder()[0]));
 
 export async function completeJson<S extends z.ZodTypeAny>(system: string, user: string, schema: S, mock: () => z.input<S>, maxTokens = 4000): Promise<z.output<S>> {
   if (isMock()) return schema.parse(mock());
-  const text = llmProvider() === "openai" ? await completeOpenAIText(system, user, maxTokens) : await completeAnthropicText(system, user, maxTokens);
-  const clean = text.replace(/```json|```/g, "").trim();
-  const start = clean.indexOf("{"); const end = clean.lastIndexOf("}");
-  return schema.parse(JSON.parse(clean.slice(start, end + 1)));
+  let lastErr: unknown;
+  for (const p of providerOrder()) {
+    try {
+      const text = p === "openai" ? await completeOpenAIText(system, user, maxTokens) : await completeAnthropicText(system, user, maxTokens);
+      const clean = text.replace(/```json|```/g, "").trim();
+      const start = clean.indexOf("{"); const end = clean.lastIndexOf("}");
+      return schema.parse(JSON.parse(clean.slice(start, end + 1)));
+    } catch (e) {
+      lastErr = e;
+      console.error(`[llm] ${p} failed${p === providerOrder().at(-1) ? "" : ", falling back to backup provider"}:`, e instanceof Error ? e.message : e);
+    }
+  }
+  throw lastErr;
 }
 
 /** Cheap deterministic embedding used when no embedding provider is configured (hash-based bag of words → 1536 dims). */
