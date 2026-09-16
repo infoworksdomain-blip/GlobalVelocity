@@ -276,6 +276,7 @@ export const automations = pgTable("automations", {
   name: text("name").notNull(), config: jsonb("config").$type<AutomationConfig>().notNull(),
   mode: text("mode").$type<"one_shot" | "continuous">().notNull(),
   approval: text("approval").$type<"auto" | "blitz" | "calendar">().notNull(),
+  kind: text("kind").$type<"manual" | "ghost_mode">().notNull().default("manual"),
   status: text("status").notNull().default("active"), lastRunAt: ts("last_run_at"), nextRunAt: ts("next_run_at"), createdAt: now(),
 });
 export const automationRuns = pgTable("automation_runs", {

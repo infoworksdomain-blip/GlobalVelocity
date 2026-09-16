@@ -1,0 +1,1 @@
+ALTER TABLE "automations" ADD COLUMN "kind" text DEFAULT 'manual' NOT NULL;

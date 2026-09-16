@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMe } from "@/lib/use-me";
 import { api, PLATFORM_LABEL } from "@/lib/api";
 import { useAction, Spinner, Badge, statusTone, Modal } from "@/components/ui";
-type Post = { id: string; status: string; scheduledAt: string; permalink: string | null; lastError: string | null; platform: string; handle: string | null; contentId: string; format: string; hook: string | null; thumbnail_url: string | null; automationId: string | null };
+type Post = { id: string; status: string; scheduledAt: string; permalink: string | null; lastError: string | null; platform: string; handle: string | null; contentId: string; format: string; hook: string | null; thumbnail_url: string | null; automationId: string | null; automationKind: string | null };
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 /** Calendar (M13): month/week/list views, drag-and-drop reschedule, approve/retry/cancel, ICS export. */
 export default function Calendar() {
@@ -40,7 +40,7 @@ export default function Calendar() {
         </div>
       )}
       <Modal open={!!sel} onClose={() => setSel(null)} title="Scheduled post">{sel && <div className="space-y-3 text-sm">
-        <div className="flex gap-2 items-center"><Badge tone={statusTone(sel.status)}>{sel.status}</Badge><span>{PLATFORM_LABEL[sel.platform]} @{sel.handle}</span>{sel.automationId && <Badge>automation</Badge>}</div>
+        <div className="flex gap-2 items-center"><Badge tone={statusTone(sel.status)}>{sel.status}</Badge><span>{PLATFORM_LABEL[sel.platform]} @{sel.handle}</span>{sel.automationId && <Badge>{sel.automationKind === "ghost_mode" ? "Ghost Mode" : "automation"}</Badge>}</div>
         <p className="font-semibold">{sel.hook}</p><p>{new Date(sel.scheduledAt).toLocaleString()}</p>
         {sel.lastError && <p className="text-red-600">{sel.lastError}</p>}{sel.permalink && <a className="underline" href={sel.permalink} target="_blank">View post</a>}
         <div className="flex flex-wrap gap-2 pt-2"><Link href={`/app/content/${sel.contentId}`} className="btn-secondary">Open content</Link>{sel.status === "pending_approval" && <button className="btn-primary" onClick={() => act(sel.id, { approve: true }, "Approved")}>Approve</button>}{["failed", "held"].includes(sel.status) && <button className="btn-primary" onClick={() => act(sel.id, { retry: true }, "Retrying")}>Retry now</button>}{!["published", "publishing", "cancelled"].includes(sel.status) && <><input type="datetime-local" className="input w-auto" onChange={(e) => e.target.value && reschedule(sel.id, new Date(e.target.value)).then(() => setSel(null))} /><button className="btn-danger" onClick={() => cancel(sel.id)}>Cancel post</button></>}</div>

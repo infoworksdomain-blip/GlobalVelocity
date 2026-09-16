@@ -6,9 +6,9 @@ import { thumbnail, store, probeDuration } from "@/lib/render";
 import { sendEmail } from "@/lib/email";
 import { emitEvent, deliver } from "@/lib/webhooks";
 import { db, schema } from "@/db";
-import { and, eq, lte, sql, desc, inArray, gte, isNull } from "drizzle-orm";
+import { and, eq, lte, sql, desc, inArray, gte, isNull, isNotNull } from "drizzle-orm";
 import { crawlSite } from "@/lib/crawler";
-import { analyzeProfile, profileEmbedding, generateAngles, generateCopy, predictedScore } from "@/lib/generation";
+import { analyzeProfile, profileEmbedding, generateAngles, generateCopy, predictedScore, matchNiche } from "@/lib/generation";
 import { moderateText, currentModelLabel } from "@/lib/llm";
 import { publicUrl } from "@/lib/storage";
 import { getPublisher } from "@/lib/publishers";
@@ -27,17 +27,26 @@ async function notify(workspaceId: string, type: string, title: string, body: st
 }
 
 // ---------------- profile.analyze ----------------
-async function profileAnalyze(job: Job<{ jobId: string; workspaceId: string; url: string }>) {
-  const { jobId, workspaceId, url } = job.data;
+async function profileAnalyze(job: Job<{ jobId: string; workspaceId: string; url: string; skipFirstBatch?: boolean }>) {
+  const { jobId, workspaceId, url, skipFirstBatch } = job.data;
   await setJob(jobId, { status: "running", progress: { step: "Reading your site", pct: 10 } });
   const crawl = await crawlSite(url);
   await setJob(jobId, { progress: { step: "Understanding your audience", pct: 50 } });
   const data = await analyzeProfile(crawl);
-  await setJob(jobId, { progress: { step: "Finding your angles", pct: 80 } });
+  await setJob(jobId, { progress: { step: skipFirstBatch ? "Matching your niche" : "Finding your angles", pct: 80 } });
   await db.update(companyProfiles).set({ isCurrent: false }).where(eq(companyProfiles.workspaceId, workspaceId));
   const [{ v }] = await db.select({ v: sql<number>`coalesce(max(version),0)::int` }).from(companyProfiles).where(eq(companyProfiles.workspaceId, workspaceId));
   const [p] = await db.insert(companyProfiles).values({ workspaceId, version: v + 1, isCurrent: true, websiteUrl: crawl.url, data, embedding: profileEmbedding(data), source: "crawl" }).returning();
   if (data.product_name) await db.update(workspaces).set({ name: data.product_name }).where(eq(workspaces.id, workspaceId));
+
+  if (skipFirstBatch) {
+    const rows = await db.selectDistinct({ category: ugcClips.category }).from(ugcClips).where(and(eq(ugcClips.status, "published"), isNotNull(ugcClips.category)));
+    const availableCategories = rows.map((r) => r.category!).filter(Boolean);
+    const nicheMatch = await matchNiche(data, availableCategories);
+    await setJob(jobId, { status: "done", progress: { step: "Done", pct: 100 }, result: { profileId: p.id, niche_match: nicheMatch } });
+    return;
+  }
+
   await setJob(jobId, { status: "done", progress: { step: "Done", pct: 100 }, result: { profileId: p.id } });
   // Kick off the first Blitz batch immediately (FR-3 flow step 6)
   const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.id, workspaceId) });

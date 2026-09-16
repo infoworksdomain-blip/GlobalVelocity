@@ -36,6 +36,29 @@ export async function analyzeProfile(crawl: CrawlResult): Promise<CompanyProfile
 }
 export const profileEmbedding = (p: CompanyProfileData) => embed([p.product_name, p.one_line_description, p.industry, ...p.key_features, ...p.content_pillars, ...p.target_audience.map((a) => a.segment)].join(" "));
 
+// ---------------- Niche matching for GhostMode ----------------
+const nicheMatchSchema = z.object({
+  matched_categories: z.array(z.string()).default([]),
+  suggested_style_tags: z.array(z.string()).default([]),
+  confidence: z.number().min(0).max(1).default(0),
+  rationale: z.string().default(""),
+});
+export type NicheMatch = z.infer<typeof nicheMatchSchema>;
+
+/** Maps a detected brand niche to the UGC library's existing category taxonomy for GhostMode. `availableCategories` must be the live distinct set from ugc_clips -- the model is instructed to only pick from it, and the result is filtered to that set again afterward as a hard guarantee (never trust the model to only emit given values). */
+export async function matchNiche(profile: CompanyProfileData, availableCategories: string[]): Promise<NicheMatch> {
+  if (!availableCategories.length) return { matched_categories: [], suggested_style_tags: [], confidence: 0, rationale: "no categories available in the UGC library" };
+  const system = `You match a business's niche to a fixed set of UGC video-library categories for content selection. Choose ONLY from AVAILABLE_CATEGORIES (return their exact strings, do not invent new ones). Return JSON {matched_categories[] (best-fit subset, most relevant first, up to 5), suggested_style_tags[] (5-10 free-form vibe/format tags such as "casual", "office", "outdoors", "unboxing" that would suit this brand's content), confidence (0-1), rationale (one sentence)}.`;
+  const user = `AVAILABLE_CATEGORIES: ${JSON.stringify(availableCategories)}\n\nBusiness: ${profile.product_name} (${profile.category}, industry: ${profile.industry})\n${profile.one_line_description}\nAudience: ${profile.target_audience.map((a) => a.segment).join(", ")}\nContent pillars: ${profile.content_pillars.join(", ")}`;
+  const res = await completeJson(system, user, nicheMatchSchema, () => ({
+    matched_categories: availableCategories.slice(0, 3),
+    suggested_style_tags: ["casual", "office"],
+    confidence: 0.3,
+    rationale: "mock: defaulted to the first available categories",
+  }));
+  return { ...res, matched_categories: res.matched_categories.filter((c) => availableCategories.includes(c)) };
+}
+
 // ---------------- Angles + copy (M4) ----------------
 export type Angle = { type: string; angle: string };
 const anglesSchema = z.object({ angles: z.array(z.object({ type: z.string(), angle: z.string() })) });

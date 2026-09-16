@@ -2,17 +2,17 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Zap, FolderOpen, Clapperboard, CalendarDays, Bot, BarChart3, Flame, Users, Settings, Shield, Bell, Search, ChevronDown, LogOut, Plus, Sparkles, CreditCard, Link2, Building2, Radio } from "lucide-react";
+import { Zap, FolderOpen, Clapperboard, CalendarDays, Bot, BarChart3, Flame, Users, Settings, Shield, Bell, Search, ChevronDown, LogOut, Plus, Sparkles, CreditCard, Link2, Building2, Radio, Ghost } from "lucide-react";
 import { useMe } from "@/lib/use-me";
 import { api } from "@/lib/api";
 import { Spinner, MockBanner } from "@/components/ui";
 
 const NAV = [
   { group: "Create", items: [["/app/velocity", Zap, "Velocity mode"], ["/app/studio", Clapperboard, "Studio"], ["/app/content", FolderOpen, "Content"], ["/app/trends", Flame, "Trends"], ["/app/characters", Users, "Characters"]] },
-  { group: "Publish", items: [["/app/calendar", CalendarDays, "Calendar"], ["/app/automations", Bot, "Automations"], ["/app/analytics", BarChart3, "Analytics"]] },
+  { group: "Publish", items: [["/app/calendar", CalendarDays, "Calendar"], ["/app/ghost-mode", Ghost, "Ghost Mode"], ["/app/automations", Bot, "Automations"], ["/app/analytics", BarChart3, "Analytics"]] },
   { group: "Account", items: [["/app/settings/profile", Settings, "Settings"], ["/app/settings/billing", CreditCard, "Billing"], ["/app/settings/api", Link2, "API & webhooks"], ["/app/affiliate", Sparkles, "Affiliate"]] },
 ] as const;
-const COMMANDS = [["Velocity mode", "/app/velocity"], ["Studio", "/app/studio"], ["Content library", "/app/content"], ["Trends", "/app/trends"], ["Characters", "/app/characters"], ["Calendar", "/app/calendar"], ["Automations", "/app/automations"], ["Analytics", "/app/analytics"], ["Profile & workspace", "/app/settings/profile"], ["Social accounts", "/app/settings/socials"], ["Billing", "/app/settings/billing"], ["Team", "/app/settings/members"], ["API keys & webhooks", "/app/settings/api"], ["Website tracking", "/app/settings/tracking"], ["Affiliate", "/app/affiliate"], ["Admin", "/app/admin"]];
+const COMMANDS = [["Velocity mode", "/app/velocity"], ["Studio", "/app/studio"], ["Content library", "/app/content"], ["Trends", "/app/trends"], ["Characters", "/app/characters"], ["Calendar", "/app/calendar"], ["Ghost Mode", "/app/ghost-mode"], ["Automations", "/app/automations"], ["Analytics", "/app/analytics"], ["Profile & workspace", "/app/settings/profile"], ["Social accounts", "/app/settings/socials"], ["Billing", "/app/settings/billing"], ["Team", "/app/settings/members"], ["API keys & webhooks", "/app/settings/api"], ["Website tracking", "/app/settings/tracking"], ["Affiliate", "/app/affiliate"], ["Admin", "/app/admin"]];
 type Notif = { id: string; title: string; body: string; link: string | null; readAt: string | null; createdAt: string };
 
 export function AppShell({ children }: { children: React.ReactNode }) {

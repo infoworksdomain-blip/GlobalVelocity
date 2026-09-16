@@ -17,10 +17,10 @@ export const GET = route(async ({ actor, params, url }) => {
 /** POST = start crawl+analysis job (FR-3.1); returns job id to poll at /v1/jobs/:id */
 export const POST = route(async ({ actor, params, body }) => {
   await requireWorkspace(actor, params.id, "editor");
-  const b = parse(z.object({ url: z.string().min(4) }), body);
+  const b = parse(z.object({ url: z.string().min(4), skip_first_batch: z.boolean().optional() }), body);
   if (moderateText(b.url).status === "blocked") throw err(422, "URL_BLOCKED", "This website cannot be used");
   const [job] = await db.insert(schema.jobs).values({ workspaceId: params.id, type: "profile.analyze" }).returning();
-  await enqueue("profile.analyze", { jobId: job.id, workspaceId: params.id, url: b.url });
+  await enqueue("profile.analyze", { jobId: job.id, workspaceId: params.id, url: b.url, skipFirstBatch: b.skip_first_batch ?? false });
   return { job_id: job.id };
 });
 /** PUT = replace profile (creates a new version, FR-3.2) */
