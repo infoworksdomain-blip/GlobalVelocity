@@ -4,17 +4,23 @@ import type { CrawlResult } from "@/lib/crawler";
 import type { CompanyProfileData, ContentFormat, TrendRecipe } from "@/db/schema";
 
 // ---------------- Company profile (M3) ----------------
+// LLMs frequently emit explicit `null` for a field they have no answer for, rather than omitting the key
+// or using an empty string -- plain z.string().optional()/.default() only tolerate `undefined`, not
+// `null`, and throw a ZodError on real (non-mobile-app, no-logo-detected) sites. strOpt/strDef normalize
+// null -> undefined/default so profile analysis doesn't crash on the common case.
+const strOpt = () => z.string().nullish().transform((v) => v ?? undefined);
+const strDef = (d: string) => z.string().nullish().transform((v) => v ?? d);
 const profileSchema = z.object({
-  product_name: z.string(), website_url: z.string(), tagline: z.string().default(""), one_line_description: z.string(),
-  category: z.enum(["saas", "mobile_app", "ecommerce", "service", "other"]).default("other"), industry: z.string().default(""),
+  product_name: z.string(), website_url: z.string(), tagline: strDef(""), one_line_description: z.string(),
+  category: z.enum(["saas", "mobile_app", "ecommerce", "service", "other"]).default("other"), industry: strDef(""),
   target_audience: z.array(z.object({ segment: z.string(), pain_points: z.array(z.string()).default([]), desires: z.array(z.string()).default([]) })).default([]),
   tone_of_voice: z.object({ adjectives: z.array(z.string()).default([]), do: z.array(z.string()).default([]), dont: z.array(z.string()).default([]) }).default({ adjectives: [], do: [], dont: [] }),
   key_features: z.array(z.string()).default([]), differentiators: z.array(z.string()).default([]),
-  competitors: z.array(z.object({ name: z.string(), url: z.string().optional() })).default([]),
-  pricing_summary: z.string().default(""), call_to_action: z.string().default(""),
-  app_store_links: z.object({ ios: z.string().optional(), android: z.string().optional() }).default({}),
-  brand: z.object({ logo_url: z.string().optional(), primary_color: z.string().optional(), secondary_color: z.string().optional(), screenshots: z.array(z.string()).default([]) }).default({ screenshots: [] }),
-  hooks_seed: z.array(z.string()).default([]), content_pillars: z.array(z.string()).default([]), language: z.string().default("en"),
+  competitors: z.array(z.object({ name: z.string(), url: strOpt() })).default([]),
+  pricing_summary: strDef(""), call_to_action: strDef(""),
+  app_store_links: z.object({ ios: strOpt(), android: strOpt() }).default({}),
+  brand: z.object({ logo_url: strOpt(), primary_color: strOpt(), secondary_color: strOpt(), screenshots: z.array(z.string()).default([]) }).default({ screenshots: [] }),
+  hooks_seed: z.array(z.string()).default([]), content_pillars: z.array(z.string()).default([]), language: strDef("en"),
   confidence: z.record(z.number()).default({}),
 });
 
@@ -41,7 +47,7 @@ const nicheMatchSchema = z.object({
   matched_categories: z.array(z.string()).default([]),
   suggested_style_tags: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(1).default(0),
-  rationale: z.string().default(""),
+  rationale: strDef(""),
 });
 export type NicheMatch = z.infer<typeof nicheMatchSchema>;
 
