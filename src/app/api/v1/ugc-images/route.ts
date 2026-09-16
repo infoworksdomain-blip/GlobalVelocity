@@ -1,6 +1,6 @@
 import { route, page } from "@/lib/route";
 import { db, schema } from "@/db";
-import { and, eq, lt, or, arrayContains, desc } from "drizzle-orm";
+import { and, eq, lt, or, arrayContains, desc, sql } from "drizzle-orm";
 import { canUseCharacterTier, limits } from "@/lib/tenancy";
 import { publicUrl } from "@/lib/storage";
 /** Mirrors /ugc-clips exactly -- same compound (createdAt, id) cursor for the same reason (bulk-registered
@@ -12,6 +12,7 @@ export const GET = route(async ({ actor, url }) => {
   const c = cursor ? decodeCursor(cursor) : null;
   const rows = await db.select().from(schema.ugcImages).where(and(
     eq(schema.ugcImages.status, "published"),
+    sql`(${schema.ugcImages.licenceExpiresAt} is null or ${schema.ugcImages.licenceExpiresAt} > now())`,
     q.get("style") ? arrayContains(schema.ugcImages.styleTags, [q.get("style")!]) : undefined,
     q.get("gender") ? eq(schema.ugcImages.gender, q.get("gender")!) : undefined,
     q.get("category") ? eq(schema.ugcImages.category, q.get("category")!) : undefined,
@@ -19,7 +20,9 @@ export const GET = route(async ({ actor, url }) => {
   )).orderBy(desc(schema.ugcImages.createdAt), desc(schema.ugcImages.id)).limit(limit);
   const last = rows[rows.length - 1];
   return {
-    images: rows.map((c2) => ({ id: c2.id, creatorName: c2.creatorName, gender: c2.gender, styleTags: c2.styleTags, category: c2.category, setting: c2.setting, width: c2.width, height: c2.height, thumbnailUrl: publicUrl(c2.thumbnailKey), previewUrl: publicUrl(c2.storageKey), tier: c2.tier, locked: !canUseCharacterTier(actor.plan, c2.tier) })),
+    // previewUrl/thumbnailUrl are the actual usable asset -- never return them for a tier the caller can't use,
+    // or `locked` is advisory-only and the paywall is trivially bypassed by calling this endpoint directly.
+    images: rows.map((c2) => { const locked = !canUseCharacterTier(actor.plan, c2.tier); return { id: c2.id, creatorName: c2.creatorName, gender: c2.gender, styleTags: c2.styleTags, category: c2.category, setting: c2.setting, width: c2.width, height: c2.height, thumbnailUrl: locked ? null : publicUrl(c2.thumbnailKey), previewUrl: locked ? null : publicUrl(c2.storageKey), tier: c2.tier, locked }; }),
     next_cursor: rows.length === limit && last ? `${last.createdAt.toISOString()}_${last.id}` : null,
     monthly_quota: limits(actor.plan).ugcImagesMonthly,
   };

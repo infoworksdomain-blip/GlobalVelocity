@@ -156,24 +156,33 @@ const linkedin: Publisher = {
   async publish(i) {
     const owner = (i.options.organization_urn as string) || `urn:li:person:${i.externalId}`;
     const h = { authorization: `Bearer ${i.accessToken}`, "content-type": "application/json", "LinkedIn-Version": "202409", "X-Restli-Protocol-Version": "2.0.0" };
-    let mediaId: string;
+    let mediaId: string; let content: Record<string, unknown>;
+    const altText = (i.title ?? "").slice(0, 200);
     if (i.mediaType === "images") {
-      // Images API: single initializeUpload -> one PUT of the raw bytes -> done, no finalize step (unlike video).
-      const media = await fetch((i.imageUrls ?? [])[0] ?? i.mediaUrl); const buf = Buffer.from(await media.arrayBuffer());
-      const init = await fetch("https://api.linkedin.com/rest/images?action=initializeUpload", { method: "POST", headers: h, body: JSON.stringify({ initializeUploadRequest: { owner } }) }).then((x) => x.json()) as { value: { uploadUrl: string; image: string } };
-      await fetch(init.value.uploadUrl, { method: "PUT", body: buf });
-      mediaId = init.value.image;
+      // Images API: one initializeUpload + one PUT of the raw bytes per image, no finalize step (unlike video).
+      const urls = (i.imageUrls ?? []).length ? i.imageUrls! : [i.mediaUrl];
+      const uploadOne = async (url: string) => {
+        const media = await fetch(url); const buf = Buffer.from(await media.arrayBuffer());
+        const init = await fetch("https://api.linkedin.com/rest/images?action=initializeUpload", { method: "POST", headers: h, body: JSON.stringify({ initializeUploadRequest: { owner } }) }).then((x) => x.json()) as { value: { uploadUrl: string; image: string } };
+        const put = await fetch(init.value.uploadUrl, { method: "PUT", body: buf });
+        if (!put.ok) throw new Error(`LinkedIn image upload failed ${put.status}`);
+        return init.value.image;
+      };
+      const mediaIds = await Promise.all(urls.map(uploadOne));
+      mediaId = mediaIds[0];
+      // LinkedIn's Posts API takes a single `content.media` for one image, but `content.multiImage.images[]` for 2+.
+      content = mediaIds.length > 1 ? { multiImage: { images: mediaIds.map((id) => ({ id, altText })) } } : { media: { id: mediaId, altText } };
     } else {
       const media = await fetch(i.mediaUrl); const buf = Buffer.from(await media.arrayBuffer());
       const init = await fetch("https://api.linkedin.com/rest/videos?action=initializeUpload", { method: "POST", headers: h, body: JSON.stringify({ initializeUploadRequest: { owner, fileSizeBytes: buf.length, uploadCaptions: false, uploadThumbnail: false } }) }).then((x) => x.json()) as { value: { video: string; uploadInstructions: { uploadUrl: string; firstByte: number; lastByte: number }[] } };
       const etags: string[] = [];
-      for (const part of init.value.uploadInstructions) { const r = await fetch(part.uploadUrl, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: buf.subarray(part.firstByte, part.lastByte + 1) }); etags.push(r.headers.get("etag") ?? ""); }
+      for (const part of init.value.uploadInstructions) { const r = await fetch(part.uploadUrl, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: buf.subarray(part.firstByte, part.lastByte + 1) }); if (!r.ok) throw new Error(`LinkedIn video part upload failed ${r.status}`); etags.push(r.headers.get("etag") ?? ""); }
       await fetch("https://api.linkedin.com/rest/videos?action=finalizeUpload", { method: "POST", headers: h, body: JSON.stringify({ finalizeUploadRequest: { video: init.value.video, uploadToken: "", uploadedPartIds: etags } }) });
       mediaId = init.value.video;
+      // `content.media` accepts `title` for video posts, `altText` for image posts (docs confirmed).
+      content = { media: { id: mediaId, title: altText } };
     }
-    // LinkedIn's content.media accepts `title` for video posts but `altText` for image posts (docs confirmed).
-    const mediaField = i.mediaType === "images" ? { id: mediaId, altText: (i.title ?? "").slice(0, 200) } : { id: mediaId, title: (i.title ?? "").slice(0, 200) };
-    const post = await fetch("https://api.linkedin.com/rest/posts", { method: "POST", headers: h, body: JSON.stringify({ author: owner, commentary: withTags(i.caption, i.hashtags).slice(0, 3000), visibility: "PUBLIC", distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] }, content: { media: mediaField }, lifecycleState: "PUBLISHED", isReshareDisabledByAuthor: false }) });
+    const post = await fetch("https://api.linkedin.com/rest/posts", { method: "POST", headers: h, body: JSON.stringify({ author: owner, commentary: withTags(i.caption, i.hashtags).slice(0, 3000), visibility: "PUBLIC", distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] }, content, lifecycleState: "PUBLISHED", isReshareDisabledByAuthor: false }) });
     if (!post.ok) throw new Error(`LinkedIn post failed ${post.status}: ${await post.text()}`);
     const id = post.headers.get("x-restli-id") ?? ""; return { externalPostId: id, permalink: id ? `https://www.linkedin.com/feed/update/${id}` : null };
   },
