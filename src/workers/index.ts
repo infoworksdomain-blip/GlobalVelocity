@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { Worker, type Job } from "bullmq";
 import { connection, coreQueue, renderQueue, enqueue } from "@/lib/queue";
-import { renderMedia, fetchBuf } from "@/lib/render/pipeline";
-import { thumbnail, store, probeDuration } from "@/lib/render";
+import { renderMedia, fetchBuf, overlayBeatsOnVideo } from "@/lib/render/pipeline";
+import { thumbnail, store, probeDuration, tts, finalizeVideo, scriptToSrt } from "@/lib/render";
 import { pushGhostModeProgress } from "@/lib/convex-server";
 import sharp from "sharp";
 import { sendEmail } from "@/lib/email";
@@ -18,6 +18,7 @@ import { decrypt, encrypt } from "@/lib/crypto";
 import { canUseCharacterTier, assertCanSave, refundCredits } from "@/lib/tenancy";
 import { snapshotVersion } from "@/lib/content";
 import { removeBackground, inpaint, upscaleImage } from "@/lib/render/image-edit";
+import { trimAndAdjustVideo, transcribeToSrt } from "@/lib/render/video-edit";
 import { PLANS, PLAN_ORDER, tierRank } from "@/lib/plans";
 import { planAutomation } from "@/lib/automations";
 import type { ContentFormat, Plan } from "@/db/schema";
@@ -143,7 +144,7 @@ async function buildRenderCtx(item: typeof contentItems.$inferSelect) {
   const demo = assets.find((a) => a.kind === "demo_video");
   const screenshot = shot ? await fetchBuf(publicUrl(shot.storageKey)) : await fetchBuf(profile.data.brand.screenshots[0]);
   const demoVideo = demo ? await fetchBuf(publicUrl(demo.storageKey)) : null;
-  return { acc, profile, trend, ctx: { prepaid: (item.provenance as { studio?: string }).studio === "video", requestedSeconds: (item.provenance as { requested_seconds?: number }).requested_seconds, itemId: item.id, workspaceId: item.workspaceId, accountId: acc.id, format: item.format, profile: profile.data, screenshot, demoVideo, character: character ? { id: character.id, name: character.name, referenceImages: character.referenceImages.map((k) => (k.startsWith("data:") || k.startsWith("http") ? k : publicUrl(k)!)), voiceId: character.voiceId } : null, clip: clip ? { storageKey: clip.storageKey, licenceType: clip.licenceType, durationMs: clip.durationMs } : null, image: image ? { storageKey: image.storageKey, thumbnailKey: image.thumbnailKey, width: image.width, height: image.height } : null, trend: trend?.recipe ?? null, overlayStyle: item.overlayStyle ?? null } };
+  return { acc, profile, trend, ctx: { prepaid: (item.provenance as { studio?: string }).studio === "video", requestedSeconds: (item.provenance as { requested_seconds?: number }).requested_seconds, itemId: item.id, workspaceId: item.workspaceId, accountId: acc.id, format: item.format, profile: profile.data, screenshot, demoVideo, character: character ? { id: character.id, name: character.name, referenceImages: character.referenceImages.map((k) => (k.startsWith("data:") || k.startsWith("http") ? k : publicUrl(k)!)), voiceId: character.voiceId } : null, clip: clip ? { storageKey: clip.storageKey, licenceType: clip.licenceType, durationMs: clip.durationMs } : null, image: image ? { storageKey: image.storageKey, thumbnailKey: image.thumbnailKey, width: image.width, height: image.height } : null, trend: trend?.recipe ?? null, overlayStyle: item.overlayStyle ?? null, beatDurations: (item.provenance as { beat_durations?: number[] }).beat_durations ?? null } };
 }
 async function generateItem(job: Job<{ itemId: string; angle: { type: string; angle: string } }>) {
   const item = await db.query.contentItems.findFirst({ where: eq(contentItems.id, job.data.itemId) });
@@ -442,12 +443,94 @@ async function imageAiEdit(job: Job<{ itemId: string; jobId: string; op: "bg_rem
   }
 }
 
+// ---------------- video.edit / video.ai_edit ----------------
+/** Local trim/crop/adjust -- always async (ffmpeg re-encode is never sub-second, unlike the sharp-based
+ *  image edits), but free -- no credit call, matching the "local CPU op = free" rule the image-edit
+ *  feature established (only its AI route charges credits). */
+async function videoEdit(job: Job<{ itemId: string; jobId: string; recipe: import("@/lib/video-edit-options").VideoEditRecipe }>) {
+  const { itemId, jobId, recipe } = job.data;
+  const item = await db.query.contentItems.findFirst({ where: eq(contentItems.id, itemId) });
+  if (!item) { await setJob(jobId, { status: "failed", error: "Content item no longer exists" }); return; }
+  try {
+    await setJob(jobId, { status: "running", progress: { step: "Processing", pct: 30 } });
+    if (!item.media.video_key) throw new Error("This item has no video to edit");
+    const srcBuf = await fetchBuf(publicUrl(item.media.video_key)); if (!srcBuf) throw new Error("Source video not readable");
+    const { mp4, durationMs } = await trimAndAdjustVideo(srcBuf, recipe);
+    const prefix = `ws/${item.workspaceId}/content/${item.id}`;
+    const outKey = await store(`${prefix}/edit-${Date.now()}.mp4`, mp4, "video/mp4");
+    const thumbKey = await store(`${prefix}/edit-${Date.now()}-thumb.jpg`, await thumbnail(mp4), "image/jpeg");
+
+    await snapshotVersion(item);
+    await db.update(contentItems).set({
+      media: { ...item.media, video_key: outKey, thumbnail_key: thumbKey, duration_ms: durationMs },
+      provenance: { ...item.provenance, video_edits: [...((item.provenance as { video_edits?: unknown[] }).video_edits ?? []), { edited_at: new Date().toISOString(), recipe }] },
+      updatedAt: new Date(),
+    }).where(eq(contentItems.id, item.id));
+    await setJob(jobId, { status: "done", progress: { step: "Done", pct: 100 }, result: { itemId: item.id } });
+  } catch (e) {
+    await setJob(jobId, { status: "failed", error: String(e).slice(0, 500) });
+    throw e;
+  }
+}
+/** AI video ops (auto-caption via Whisper, voice-swap via ElevenLabs TTS) -- real provider calls, async,
+ *  credit debit-up-front (in the API route)/refund-on-final-failure exactly like imageAiEdit. */
+async function videoAiEdit(job: Job<{ itemId: string; jobId: string; op: "auto_caption" | "voice_swap"; voiceId?: string; accountId: string; creditsUsed: number }>) {
+  const { itemId, jobId, op, voiceId, accountId, creditsUsed } = job.data;
+  const item = await db.query.contentItems.findFirst({ where: eq(contentItems.id, itemId) });
+  if (!item) { await setJob(jobId, { status: "failed", error: "Content item no longer exists" }); return; }
+  try {
+    await setJob(jobId, { status: "running", progress: { step: "Processing", pct: 30 } });
+    if (!item.media.video_key) throw new Error("This item has no video to edit");
+    const srcBuf = await fetchBuf(publicUrl(item.media.video_key)); if (!srcBuf) throw new Error("Source video not readable");
+    let mp4: Buffer; let durationMs = item.media.duration_ms ?? 0;
+
+    if (op === "auto_caption") {
+      const srt = await transcribeToSrt(srcBuf);
+      const fin = await finalizeVideo(srcBuf, srt); mp4 = fin.mp4; durationMs = fin.durationMs;
+    } else {
+      // voice_swap: only meaningful for human_ugc clips with a replaceable TTS audio track -- hook_demo/
+      // remix have no synthesized voice at all, and ai_ugc's voice is baked into a provider-driven
+      // lip-synced render (swap = re-render with a different character.voiceId, already possible via the
+      // existing rerender flow, not a new capability). Re-checked here, not just trusted from the route,
+      // since job data could in principle be stale by the time this runs.
+      if (item.format !== "human_ugc" || !item.ugcClipId) throw new Error("Voice swap is only available for human UGC items");
+      const clip = await db.query.ugcClips.findFirst({ where: eq(ugcClips.id, item.ugcClipId) });
+      if (!clip || clip.licenceType !== "audio_replace") throw new Error("This clip's licence doesn't allow audio replacement");
+      const { profile } = await buildRenderCtx(item);
+      const brand = { primary: profile.data.brand.primary_color || "#1F3A93", secondary: profile.data.brand.secondary_color || "#0B1F4B", name: profile.data.product_name };
+      const script = item.script ?? item.hook ?? "";
+      const { audio, durationMs: audioMs } = await tts(script, voiceId ?? null);
+      const seconds = Math.min(Math.round(clip.durationMs / 1000) || 30, Math.max(15, Math.ceil(audioMs / 1000)));
+      const beats = item.onScreenText.length ? item.onScreenText.map((t) => ({ text: t, seconds: seconds / item.onScreenText.length })) : [{ text: item.hook ?? "", seconds }];
+      const overlaid = await overlayBeatsOnVideo(srcBuf, beats, brand, audio, false, item.overlayStyle);
+      const fin = await finalizeVideo(overlaid.mp4, scriptToSrt(script, seconds * 1000)); mp4 = fin.mp4; durationMs = fin.durationMs;
+    }
+
+    const prefix = `ws/${item.workspaceId}/content/${item.id}`;
+    const outKey = await store(`${prefix}/edit-${Date.now()}.mp4`, mp4, "video/mp4");
+    const thumbKey = await store(`${prefix}/edit-${Date.now()}-thumb.jpg`, await thumbnail(mp4), "image/jpeg");
+
+    await snapshotVersion(item);
+    await db.update(contentItems).set({
+      media: { ...item.media, video_key: outKey, thumbnail_key: thumbKey, duration_ms: durationMs },
+      provenance: { ...item.provenance, video_edits: [...((item.provenance as { video_edits?: unknown[] }).video_edits ?? []), { edited_at: new Date().toISOString(), op, credits_consumed: creditsUsed }] },
+      updatedAt: new Date(),
+    }).where(eq(contentItems.id, item.id));
+    await setJob(jobId, { status: "done", progress: { step: "Done", pct: 100 }, result: { itemId: item.id } });
+  } catch (e) {
+    await setJob(jobId, { status: "failed", error: String(e).slice(0, 500) });
+    if (job.attemptsMade + 1 >= (job.opts.attempts ?? 1) && creditsUsed) await refundCredits(accountId, creditsUsed, "content_item", item.id);
+    throw e;
+  }
+}
+
 // ---------------- boot ----------------
 const handlers: Record<string, (job: Job) => Promise<void>> = {
   "profile.analyze": profileAnalyze, "generate.batch": generateBatch, "generate.item": generateItem, "publish.dispatch": publishDispatch, "publish.post": publishPost,
   "metrics.pull": metricsPull, "tokens.refresh": tokensRefresh, "automation.run": automationRun, "automations.tick": automationsTick, "credits.allocate": creditsAllocate, "cleanup": cleanup, "content.recover": recoverStuckContent,
   "render.item": renderItem, "digest.weekly": digestWeekly, "trends.refresh": trendsRefresh, "webhook.deliver": webhookDeliver, "affiliates.settle": affiliatesSettle,
   "ugc.thumbnail": ugcThumbnail, "ugc_image.process": ugcImageProcess, "image.ai_edit": imageAiEdit,
+  "video.edit": videoEdit, "video.ai_edit": videoAiEdit,
 };
 // WORKER_ROLE lets the render/ingest queues (ffmpeg/image/video-heavy "content-building" work) run on a
 // separate host (e.g. Railway) from the core queue + all repeatable schedulers (latency/correctness-

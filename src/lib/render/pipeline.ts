@@ -19,11 +19,11 @@ export type RenderCtx = {
   screenshot: Buffer | null; demoVideo: Buffer | null; character: { id: string; name: string; referenceImages: string[]; voiceId: string | null } | null;
   clip: { storageKey: string; licenceType: "audio_replace" | "subtitle_only"; durationMs: number } | null;
   image: { storageKey: string; thumbnailKey: string | null; width: number | null; height: number | null } | null;
-  trend: TrendRecipe | null; overlayStyle: OverlayStyle | null;
+  trend: TrendRecipe | null; overlayStyle: OverlayStyle | null; beatDurations?: number[] | null;
 };
 
 /** Overlay caption beats onto b-roll video (demo video or human UGC clip), cut to the total beat length, muted or with supplied audio. */
-async function overlayBeatsOnVideo(video: Buffer, beats: { text: string; seconds: number }[], brand: R.Brand, audio: Buffer | null, keepOriginalAudio: boolean, style?: OverlayStyle | null) {
+export async function overlayBeatsOnVideo(video: Buffer, beats: { text: string; seconds: number }[], brand: R.Brand, audio: Buffer | null, keepOriginalAudio: boolean, style?: OverlayStyle | null) {
   const dir = await mkdtemp(join(tmpdir(), "vel-"));
   try {
     const inp = join(dir, "in.mp4"); await writeFile(inp, video);
@@ -72,7 +72,11 @@ export async function renderMedia(ctx: RenderCtx, copy: Copy): Promise<{ media: 
     const png = await R.renderMeme(copy.meme_top ?? copy.hook, copy.meme_bottom ?? copy.caption, brand, ctx.screenshot);
     media.image_keys = [await R.store(`${prefix}/meme.png`, png, "image/png")]; media.thumbnail_key = media.image_keys[0];
   } else if (ctx.format === "hook_demo" || ctx.format === "remix") {
-    const beats = ctx.format === "remix" && ctx.trend ? ctx.trend.structure.map((s, i) => ({ text: copy.on_screen_text[i] ?? s.text_slot ?? s.segment, seconds: s.seconds })) : [{ text: copy.hook, seconds: 3 }, ...copy.on_screen_text.slice(1).map((t) => ({ text: t, seconds: 3 }))];
+    const defaultBeats = ctx.format === "remix" && ctx.trend ? ctx.trend.structure.map((s, i) => ({ text: copy.on_screen_text[i] ?? s.text_slot ?? s.segment, seconds: s.seconds })) : [{ text: copy.hook, seconds: 3 }, ...copy.on_screen_text.slice(1).map((t) => ({ text: t, seconds: 3 }))];
+    // User-edited per-beat durations from TimelineEditor (provenance.beat_durations) override the default
+    // 3s/trend-derived timing when present -- only meaningful for hook_demo/remix, which have no synthesized
+    // voice track to desync from (human_ugc/ai_ugc timing is derived from TTS audio length instead).
+    const beats = ctx.beatDurations?.length === defaultBeats.length ? defaultBeats.map((b, i) => ({ ...b, seconds: ctx.beatDurations![i] })) : defaultBeats;
     if (ctx.demoVideo) { const { mp4, durationMs } = await overlayBeatsOnVideo(ctx.demoVideo, beats, brand, null, false, ctx.overlayStyle); await storeVideo(mp4, durationMs); }
     else { const frames = []; for (const b of beats) frames.push({ png: await R.renderCaptionFrame(b.text, brand, undefined, ctx.screenshot, ctx.overlayStyle), seconds: b.seconds }); const { mp4, durationMs } = await R.framesToVideo(frames); await storeVideo(mp4, durationMs); }
   } else if (ctx.format === "human_ugc") {

@@ -5,11 +5,11 @@ export const connection = new IORedis(process.env.REDIS_URL || "redis://localhos
 /** Three queues: render (heavy ffmpeg, slow) and core (time-critical: publishing, tokens) must never wait on
  *  each other (learned in the first runtime test) -- ingest (bulk clip thumbnailing) is split out for the same
  *  reason: thumbnailing thousands of uploaded clips must not starve either of them. */
-export type RenderJob = "generate.batch" | "generate.item" | "render.item" | "image.ai_edit";
+export type RenderJob = "generate.batch" | "generate.item" | "render.item" | "image.ai_edit" | "video.edit" | "video.ai_edit";
 export type IngestJob = "ugc.thumbnail" | "ugc_image.process";
 export type CoreJob = "profile.analyze" | "publish.dispatch" | "publish.post" | "metrics.pull" | "tokens.refresh" | "automation.run" | "automations.tick" | "credits.allocate" | "digest.weekly" | "trends.refresh" | "webhook.deliver" | "affiliates.settle" | "cleanup" | "content.recover";
 export type JobName = RenderJob | IngestJob | CoreJob;
-const RENDER: ReadonlySet<string> = new Set(["generate.batch", "generate.item", "render.item", "image.ai_edit"]);
+const RENDER: ReadonlySet<string> = new Set(["generate.batch", "generate.item", "render.item", "image.ai_edit", "video.edit", "video.ai_edit"]);
 const INGEST: ReadonlySet<string> = new Set(["ugc.thumbnail", "ugc_image.process"]);
 
 const g = globalThis as unknown as { qCore?: Queue; qRender?: Queue; qIngest?: Queue };
