@@ -39,7 +39,12 @@ export async function trimAndAdjustVideo(mp4: Buffer, recipe: VideoEditRecipe): 
       filters.push(`eq=brightness=${(brightness - 1).toFixed(3)}:contrast=${contrast.toFixed(3)}:saturation=${saturation.toFixed(3)}`);
     }
     if (filters.length) args.push("-vf", filters.join(","));
-    args.push("-r", "30", "-c:v", "libx264", "-preset", preset(), "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out);
+    // hook_demo/remix videos with no demo-video b-roll are rendered from caption frames with no audio
+    // track at all (framesToVideo() called without an audio buffer) -- forcing -c:a aac on a source with
+    // zero audio streams is exactly the kind of edge case that behaves unpredictably across ffmpeg
+    // builds rather than failing cleanly, so only encode audio when the source actually has a stream.
+    const { stdout: streams } = await exec("ffprobe", ["-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", inp]);
+    args.push("-r", "30", "-c:v", "libx264", "-preset", preset(), "-crf", "23", ...(streams.trim() ? ["-c:a", "aac", "-b:a", "128k"] : ["-an"]), "-movflags", "+faststart", out);
     try { await exec("ffmpeg", args, { maxBuffer: 1 << 26 }); } catch (e) { throw new Error(describeExecError(e)); }
     const { stdout } = await exec("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", out]);
     return { mp4: await readFile(out), durationMs: Math.round(parseFloat(stdout) * 1000) };
