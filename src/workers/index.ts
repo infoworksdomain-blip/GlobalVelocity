@@ -123,7 +123,7 @@ async function generateBatch(job: Job<{ batchId: string }>) {
     const image = format === "human_image" && images.length && ugcImageUsed < ugcImageQuota ? images[i % images.length] : null;
     if (format === "human_image" && !image) format = "ai_ugc"; // graceful fallback when no licensed images / quota
     if (image) ugcImageUsed++;
-    const character = format === "ai_ugc" && usable.length ? usable[i % usable.length] : null;
+    const character = (format === "ai_ugc" || format === "green_screen") && usable.length ? usable[i % usable.length] : null;
     const trend = format === "remix" && trendRows.length ? trendRows[i % trendRows.length] : null;
     const [item] = await db.insert(contentItems).values({ workspaceId: batch.workspaceId, batchId: batch.id, format, status: "generating", angle: angles[i].angle, characterId: character?.id, trendId: trend?.id, ugcClipId: clip?.id, ugcImageId: image?.id, language: params.language ?? profile.data.language, provenance: { angle_type: angles[i].type, profile_version: profile.version, similar_to: params.similar_to } }).returning();
     await enqueue("generate.item", { itemId: item.id, angle: angles[i] }, { attempts: 3, priority: batch.source === "automation" ? 5 : 10 });
