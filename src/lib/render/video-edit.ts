@@ -9,6 +9,16 @@ import type { VideoEditRecipe } from "@/lib/video-edit-options";
 const exec = promisify(execFile);
 const preset = () => (process.env.PROVIDER_MODE === "live" ? "veryfast" : "ultrafast");
 
+/** execFile's rejection message interleaves a (sometimes huge) build-config banner with live per-frame
+ *  progress spam -- neither the head nor a plain tail slice reliably contains the actual failure reason.
+ *  The real diagnostic signal is the structured .code/.signal properties Node attaches to the error
+ *  object, not the message string -- surface those explicitly instead of guessing string positions. */
+function describeExecError(e: unknown): string {
+  const err = e as { code?: number | string; signal?: string | null; stderr?: string; message?: string };
+  const tail = (err.stderr ?? err.message ?? String(e)).replace(/\r/g, "\n").split("\n").filter(Boolean).slice(-5).join(" | ");
+  return `ffmpeg exited (code=${err.code ?? "?"}, signal=${err.signal ?? "none"}): ${tail}`.slice(0, 500);
+}
+
 /** Trim + crop + brightness/contrast/saturation in a single ffmpeg pass (one re-encode, not one per
  *  sub-op) -- same temp-dir/exec pattern as finalizeVideo/framesToVideo in src/lib/render/index.ts, and
  *  the same encode settings (libx264/aac/+faststart/preset()) for consistency with the rest of the app. */
@@ -30,7 +40,7 @@ export async function trimAndAdjustVideo(mp4: Buffer, recipe: VideoEditRecipe): 
     }
     if (filters.length) args.push("-vf", filters.join(","));
     args.push("-r", "30", "-c:v", "libx264", "-preset", preset(), "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out);
-    await exec("ffmpeg", args, { maxBuffer: 1 << 26 });
+    try { await exec("ffmpeg", args, { maxBuffer: 1 << 26 }); } catch (e) { throw new Error(describeExecError(e)); }
     const { stdout } = await exec("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", out]);
     return { mp4: await readFile(out), durationMs: Math.round(parseFloat(stdout) * 1000) };
   } finally { await rm(dir, { recursive: true, force: true }); }
