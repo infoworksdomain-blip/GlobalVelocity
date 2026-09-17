@@ -198,7 +198,7 @@ export const aiModels = pgTable("ai_models", {
 });
 
 // ---------------- Content ----------------
-export type ContentFormat = "ai_ugc" | "human_ugc" | "human_image" | "slideshow" | "hook_demo" | "meme" | "remix" | "upload";
+export type ContentFormat = "ai_ugc" | "human_ugc" | "human_image" | "slideshow" | "hook_demo" | "meme" | "remix" | "upload" | "wall_of_text" | "green_screen";
 export type ContentStatus = "generating" | "candidate" | "skipped" | "saved" | "draft" | "scheduled" | "published" | "failed" | "archived";
 export type ContentMedia = { video_key?: string; image_keys?: string[]; thumbnail_key?: string; duration_ms?: number; width?: number; height?: number };
 export type OverlayPosition = "top" | "center" | "bottom";

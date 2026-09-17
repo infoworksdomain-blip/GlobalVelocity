@@ -62,11 +62,12 @@ export const GET = route(async ({ actor, url }) => {
     const days = await db.execute(sql`select to_char(d, 'YYYY-MM-DD') as day,
         (select count(*) from content_items ci where ci.created_at::date = d) as items,
         (select count(*) from content_items ci where ci.created_at::date = d and ci.format = 'ai_ugc') as ai_ugc,
+        (select count(*) from content_items ci where ci.created_at::date = d and ci.format = 'green_screen') as green_screen,
         (select coalesce(-sum(delta),0) from credit_ledger cl where cl.created_at::date = d and reason in ('image','video')) as credits,
         (select count(*) from scheduled_posts sp where sp.published_at::date = d) as published,
         (select count(*) from jobs j where j.created_at::date = d and j.type = 'profile.analyze') as analyses
       from generate_series(current_date - 29, current_date, '1 day') d order by d`);
-    const rows = (days as unknown as { day: string; items: string; ai_ugc: string; credits: string; published: string; analyses: string }[]).map((r) => { const items = Number(r.items), aiugc = Number(r.ai_ugc), credits = Number(r.credits), analyses = Number(r.analyses); const llm = items * 2 + analyses; const est = llm * unit.llm_call + credits * 0.01 + items * 0.5 * unit.render_cpu_min; return { day: r.day, items, ai_ugc: aiugc, credits, published: Number(r.published), analyses, llm_calls: llm, est_cost_usd: Math.round(est * 100) / 100 }; });
+    const rows = (days as unknown as { day: string; items: string; ai_ugc: string; green_screen: string; credits: string; published: string; analyses: string }[]).map((r) => { const items = Number(r.items), aiugc = Number(r.ai_ugc), greenScreen = Number(r.green_screen), credits = Number(r.credits), analyses = Number(r.analyses); const llm = items * 2 + analyses; const est = llm * unit.llm_call + credits * 0.01 + items * 0.5 * unit.render_cpu_min; return { day: r.day, items, ai_ugc: aiugc, green_screen: greenScreen, credits, published: Number(r.published), analyses, llm_calls: llm, est_cost_usd: Math.round(est * 100) / 100 }; });
     return { unit, days: rows, total_est_usd: Math.round(rows.reduce((a, r) => a + r.est_cost_usd, 0) * 100) / 100 };
   }
   if (view === "audit") return { audit: await db.select().from(schema.auditLog).orderBy(desc(schema.auditLog.createdAt)).limit(200) };

@@ -6,7 +6,7 @@ import { enqueue } from "@/lib/queue";
 import { err } from "@/lib/errors";
 import { z } from "zod";
 
-const FORMATS = ["ai_ugc", "human_ugc", "slideshow", "hook_demo", "meme", "remix"] as const;
+const FORMATS = ["ai_ugc", "human_ugc", "slideshow", "hook_demo", "meme", "remix", "wall_of_text", "green_screen"] as const;
 export const POST = route(async ({ actor, params, body }) => {
   const { ws, plan } = await requireWorkspace(actor, params.id, "editor");
   const b = parse(z.object({ count: z.number().int().min(1).max(100).default(30), formats: z.array(z.enum(FORMATS)).optional(), character_ids: z.array(z.string().uuid()).optional(), trend_ids: z.array(z.string().uuid()).optional(), language: z.string().max(8).optional(), angle_hints: z.array(z.string()).optional(), source: z.enum(["blitz", "studio", "api"]).default("blitz") }), body);

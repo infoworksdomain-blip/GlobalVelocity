@@ -12,10 +12,11 @@ export function TimelineEditor({ item, provenance, onClose, onDone }: { item: It
   const [overlay, setOverlay] = useState<OverlayStyle>({});
   useEffect(() => { if (!item) return; setSlides(((provenance.slides as Slide[]) ?? []).map((s) => ({ ...s }))); setBeats([...item.on_screen_text]); const bd = provenance.beat_durations as number[] | undefined; setDurations(item.on_screen_text.map((_, i) => bd?.[i] ?? 3)); const m = provenance.meme as { top?: string; bottom?: string } | undefined; setMeme({ top: m?.top ?? "", bottom: m?.bottom ?? "" }); setOverlay(item.overlay_style ?? {}); }, [item, provenance]);
   if (!item) return null;
-  const isSlides = item.format === "slideshow", isMeme = item.format === "meme", isBeats = ["hook_demo", "remix", "ai_ugc", "human_ugc"].includes(item.format);
-  // Only hook_demo/remix have no synthesized voice track to desync from -- human_ugc/ai_ugc beat timing
-  // is derived from TTS audio length, so editing it independently there would break lip-sync/pacing.
-  const isTimedBeats = item.format === "hook_demo" || item.format === "remix";
+  const isSlides = item.format === "slideshow", isMeme = item.format === "meme", isBeats = ["hook_demo", "remix", "ai_ugc", "human_ugc", "wall_of_text", "green_screen"].includes(item.format);
+  // Only hook_demo/remix/wall_of_text have no synthesized voice track to desync from -- human_ugc/ai_ugc/
+  // green_screen beat timing is derived from TTS audio length, so editing it independently there would
+  // break lip-sync/pacing.
+  const isTimedBeats = item.format === "hook_demo" || item.format === "remix" || item.format === "wall_of_text";
   const move = <T,>(arr: T[], i: number, d: number) => { const a = [...arr]; const j = i + d; if (j < 0 || j >= a.length) return a; [a[i], a[j]] = [a[j], a[i]]; return a; };
   const save = () => run(async () => {
     await api(`/content/${item.id}`, { method: "PATCH", json: { ...(isSlides ? { slides, on_screen_text: slides.map((s) => s.title) } : {}), ...(isBeats ? { on_screen_text: beats } : {}), ...(isMeme ? { meme_top: meme.top, meme_bottom: meme.bottom } : {}), ...(isBeats ? { overlay_style: Object.keys(overlay).length ? overlay : null } : {}), ...(isTimedBeats ? { beat_durations: durations } : {}) } });

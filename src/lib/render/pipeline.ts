@@ -102,6 +102,24 @@ export async function renderMedia(ctx: RenderCtx, copy: Copy): Promise<{ media: 
     // Already stored in our own bucket by the bulk-ingest pipeline -- no transform needed, just reference it.
     media.image_keys = [ctx.image.storageKey]; media.thumbnail_key = ctx.image.thumbnailKey ?? ctx.image.storageKey;
     if (ctx.image.width) media.width = ctx.image.width; if (ctx.image.height) media.height = ctx.image.height;
+  } else if (ctx.format === "wall_of_text") {
+    const defaultBeats = copy.on_screen_text.length ? copy.on_screen_text.map((t) => ({ text: t, seconds: 2.5 })) : [{ text: copy.hook, seconds: 2.5 }];
+    const beats = ctx.beatDurations?.length === defaultBeats.length ? defaultBeats.map((b, i) => ({ ...b, seconds: ctx.beatDurations![i] })) : defaultBeats;
+    const frames = []; for (const b of beats) frames.push({ png: await R.renderTextWallFrame(b.text, ctx.overlayStyle), seconds: b.seconds });
+    const { mp4, durationMs } = await R.framesToVideo(frames); await storeVideo(mp4, durationMs);
+  } else if (ctx.format === "green_screen") {
+    const { audio, durationMs } = await R.tts(copy.script, ctx.character?.voiceId ?? null);
+    const seconds = ctx.requestedSeconds ?? Math.min(60, Math.max(15, Math.ceil(durationMs / 1000)));
+    const providerLive = process.env.PROVIDER_MODE === "live" && !!process.env.VIDEO_PROVIDER_URL;
+    if (providerLive && !ctx.prepaid) { creditsUsed = R.videoCredits(seconds); await consumeCredits(ctx.accountId, creditsUsed, "video", "content_item", ctx.itemId); }
+    let avatarMp4: Buffer | null = null;
+    try { avatarMp4 = (await R.talkingHead({ script: copy.script, audio, characterImageUrl: ctx.character?.referenceImages[0] ?? null, voiceId: ctx.character?.voiceId ?? null, characterId: ctx.character?.id ?? null })).mp4; }
+    catch (e) { if (creditsUsed) await refundCredits(ctx.accountId, creditsUsed, "content_item", ctx.itemId); throw e; }
+    if (!avatarMp4) { const charImg = await fetchBuf(ctx.character?.referenceImages[0]); const frame = await R.renderCaptionFrame(copy.hook, brand, ctx.character ? `${ctx.character.name} · Green screen (preview render)` : "Green screen (preview render)", charImg ?? ctx.screenshot, ctx.overlayStyle); avatarMp4 = (await R.framesToVideo([{ png: frame, seconds }], audio)).mp4; }
+    // No screenshot to react to -- composite over a plain neutral card rather than skipping the PiP entirely.
+    const background = ctx.screenshot ?? (await sharp({ create: { width: R.W, height: R.H, channels: 4, background: "#0b0b0f" } }).png().toBuffer());
+    const { mp4 } = await R.compositeAvatarOverBackground(avatarMp4, background, seconds);
+    const fin = await R.finalizeVideo(mp4, R.scriptToSrt(copy.script, seconds * 1000)); await storeVideo(fin.mp4, fin.durationMs);
   } else { throw new Error(`Cannot render format ${ctx.format}`); }
   return { media, creditsUsed };
 }

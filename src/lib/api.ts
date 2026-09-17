@@ -9,5 +9,5 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
   return data as T;
 }
 export const fmtNum = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n));
-export const FORMAT_LABEL: Record<string, string> = { ai_ugc: "AI UGC", human_ugc: "Human UGC", slideshow: "Slideshow", hook_demo: "Hook + demo", meme: "Meme", remix: "Trend remix", upload: "Upload" };
+export const FORMAT_LABEL: Record<string, string> = { ai_ugc: "AI UGC", human_ugc: "Human UGC", human_image: "Human image", slideshow: "Slideshow", hook_demo: "Hook + demo", meme: "Meme", remix: "Trend remix", upload: "Upload", wall_of_text: "Wall of text", green_screen: "Green screen" };
 export const PLATFORM_LABEL: Record<string, string> = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube", linkedin: "LinkedIn" };

@@ -96,6 +96,8 @@ const formatBrief: Record<ContentFormat, string> = {
   meme: "A meme: meme_top and meme_bottom lines that reframe the audience's pain point with humour. Keep each under 12 words.",
   remix: "A remix of a trending format: fill the recipe's text slots with product-specific lines; keep the structure and timing.",
   upload: "Caption only.",
+  wall_of_text: "A progressive text-reveal video: 5-8 short, punchy on-screen lines building to a payoff, no voiceover needed. Return them in on_screen_text. Each line <=10 words.",
+  green_screen: "A 15-25 second reaction/commentary script as if presenting in front of a screenshot on screen, first person, casual. 60-90 words.",
 };
 export async function generateCopy(profile: CompanyProfileData, angle: Angle, format: ContentFormat, opts: { language?: string; trend?: TrendRecipe | null; platformHint?: string }): Promise<Copy> {
   const system = `You are a short-form content writer for TikTok/Reels/Shorts/LinkedIn. Tone: ${profile.tone_of_voice.adjectives.join(", ")}. Do: ${profile.tone_of_voice.do.join("; ")}. Don't: ${profile.tone_of_voice.dont.join("; ")}. Never make medical, financial or guaranteed-results claims. Write in language "${opts.language ?? profile.language}". Return JSON {hook, script, on_screen_text[], caption, hashtags[], slides?[], meme_top?, meme_bottom?}. Hook <= 12 words. Caption <= 300 chars ending with a CTA. 4-6 hashtags without #.`;
@@ -115,6 +117,6 @@ export async function generateCopy(profile: CompanyProfileData, angle: Angle, fo
 
 /** Simple performance prior used to order the Velocity stack (FR-5 / design decision †). */
 export function predictedScore(format: ContentFormat, trendVelocity: number | null, angleNovelty: number) {
-  const base: Record<ContentFormat, number> = { ai_ugc: 0.62, human_ugc: 0.66, human_image: 0.6, slideshow: 0.6, hook_demo: 0.55, meme: 0.5, remix: 0.58, upload: 0.5 };
+  const base: Record<ContentFormat, number> = { ai_ugc: 0.62, human_ugc: 0.66, human_image: 0.6, slideshow: 0.6, hook_demo: 0.55, meme: 0.5, remix: 0.58, upload: 0.5, wall_of_text: 0.55, green_screen: 0.6 };
   return Math.min(0.99, base[format] + (trendVelocity ?? 0) * 0.2 + angleNovelty * 0.15);
 }

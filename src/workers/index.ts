@@ -74,7 +74,7 @@ async function profileAnalyze(job: Job<{ jobId: string; workspaceId: string; url
 }
 
 // ---------------- generate.batch ----------------
-const DEFAULT_MIX: Record<ContentFormat, number> = { ai_ugc: 0.35, slideshow: 0.3, hook_demo: 0.15, meme: 0.1, remix: 0.1, human_ugc: 0, human_image: 0, upload: 0 };
+const DEFAULT_MIX: Record<ContentFormat, number> = { ai_ugc: 0.35, slideshow: 0.3, hook_demo: 0.15, meme: 0.1, remix: 0.1, human_ugc: 0, human_image: 0, upload: 0, wall_of_text: 0, green_screen: 0 };
 async function generateBatch(job: Job<{ batchId: string }>) {
   const batch = await db.query.generationBatches.findFirst({ where: eq(generationBatches.id, job.data.batchId) });
   if (!batch) return;

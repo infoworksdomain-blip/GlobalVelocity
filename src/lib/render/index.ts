@@ -100,6 +100,40 @@ export async function renderCaptionFrame(line: string, brand: Brand, sub?: strin
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
+/** Plain full-bleed text card for "wall of text" -- deliberately undecorated (no pill box, no logo chip)
+ *  so it reads as a distinct visual style from renderCaptionFrame's branded treatment, even though both
+ *  feed the same framesToVideo() stitching mechanism. */
+export async function renderTextWallFrame(text: string, style?: OverlayStyle | null): Promise<Buffer> {
+  const s = resolveOverlayStyle(style);
+  const fontSize = style?.font_size_px ?? 104; // noticeably larger than the 88px default -- this format IS the text
+  const scale = fontSize / 88;
+  const lines = wrap(text, 16);
+  const lineH = 128 * scale;
+  const totalH = lines.length * lineH;
+  const y0 = H / 2 - totalH / 2 + lineH * 0.7;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+    <rect width="${W}" height="${H}" fill="#0b0b0f"/>
+    ${textBlock(lines, W / 2, y0, fontSize, { lineHeight: lineH, fill: s.color, weight: s.weight, fontFamily: s.fontFamily })}
+  </svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+/** Picture-in-picture composite for "green screen": scales a background image to fill the frame, overlays
+ *  a smaller inset of the (full-frame) avatar video near the bottom. The TalkingHeadProvider contract has
+ *  no background-control parameter (confirmed: it always returns a full-frame avatar video), so this is an
+ *  honest PiP approximation of the TikTok green-screen effect, not a true chroma-key. */
+export async function compositeAvatarOverBackground(avatarMp4: Buffer, background: Buffer, seconds: number): Promise<{ mp4: Buffer; durationMs: number }> {
+  const dir = await mkdtemp(join(tmpdir(), "vel-"));
+  try {
+    const bgPath = join(dir, "bg.png"), avatarPath = join(dir, "avatar.mp4"), out = join(dir, "out.mp4");
+    await writeFile(bgPath, await sharp(background).resize(W, H, { fit: "cover" }).png().toBuffer());
+    await writeFile(avatarPath, avatarMp4);
+    const args = ["-y", "-loop", "1", "-i", bgPath, "-i", avatarPath, "-filter_complex", "[1:v]scale=760:-1[pip];[0:v][pip]overlay=(W-w)/2:H-h-60", "-map", "0:v", "-map", "1:a?", "-t", String(seconds), "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-movflags", "+faststart", out];
+    await exec("ffmpeg", args, { maxBuffer: 1 << 26 });
+    return { mp4: await readFile(out), durationMs: Math.round(seconds * 1000) };
+  } finally { await rm(dir, { recursive: true, force: true }); }
+}
+
 /** Stitch frames into a 1080x1920 H.264 MP4, each frame shown for `seconds`, with optional audio track. Returns MP4 buffer + duration ms. */
 export async function framesToVideo(frames: { png: Buffer; seconds: number }[], audio?: Buffer | null): Promise<{ mp4: Buffer; durationMs: number }> {
   const dir = await mkdtemp(join(tmpdir(), "vel-"));
