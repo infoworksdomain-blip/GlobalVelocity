@@ -468,7 +468,9 @@ async function videoEdit(job: Job<{ itemId: string; jobId: string; recipe: impor
     }).where(eq(contentItems.id, item.id));
     await setJob(jobId, { status: "done", progress: { step: "Done", pct: 100 }, result: { itemId: item.id } });
   } catch (e) {
-    await setJob(jobId, { status: "failed", error: String(e).slice(0, 500) });
+    // ffmpeg's execFile error message leads with its full build-config banner (often 500+ chars on its
+    // own) before the actual failure line -- take the tail, not the head, or the real error never surfaces.
+    await setJob(jobId, { status: "failed", error: String(e).slice(-500) });
     throw e;
   }
 }
@@ -518,7 +520,9 @@ async function videoAiEdit(job: Job<{ itemId: string; jobId: string; op: "auto_c
     }).where(eq(contentItems.id, item.id));
     await setJob(jobId, { status: "done", progress: { step: "Done", pct: 100 }, result: { itemId: item.id } });
   } catch (e) {
-    await setJob(jobId, { status: "failed", error: String(e).slice(0, 500) });
+    // Same tail-not-head reasoning as videoEdit's catch -- this path can also fail inside ffmpeg
+    // (finalizeVideo/overlayBeatsOnVideo), not just at the Whisper/ElevenLabs call.
+    await setJob(jobId, { status: "failed", error: String(e).slice(-500) });
     if (job.attemptsMade + 1 >= (job.opts.attempts ?? 1) && creditsUsed) await refundCredits(accountId, creditsUsed, "content_item", item.id);
     throw e;
   }
